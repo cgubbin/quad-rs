@@ -1,0 +1,20 @@
+[package]
+name = "quad-rs"
+version = "0.1.0"
+edition = "2021"
+authors = ["Christopher R. Gubbin <cgubbin@protonmail.com>"]
+description = "Adaptive Gauss-Kronrod Integration in Rust"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[dependencies]
+approx = "0.5.1"
+nalgebra = "0.30.1"
+num-complex = "0.4.0"
+num-traits = "0.2.14"
+ordered-float = "2.10.0"
+thiserror = "1.0.30"
+
+[dev-dependencies]
+approx = "0.5.1"
+rand = "0.8.4"
+
