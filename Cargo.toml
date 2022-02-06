@@ -4,8 +4,13 @@ version = "0.1.0"
 edition = "2021"
 authors = ["Christopher R. Gubbin <cgubbin@protonmail.com>"]
 description = "Adaptive Gauss-Kronrod Integration in Rust"
+categories = ["mathematics", "science"]
+keywords = ["integration", "math", "physics"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/cgubbin/quad-rs/"
+homepage = "https://github.com/cgubbin/quad-rs/"
+readme = "README.md"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
 approx = "0.5.1"
 nalgebra = "0.30.1"
