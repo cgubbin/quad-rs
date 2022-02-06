@@ -88,7 +88,7 @@ where
             integral: segments.result(),
             error: segments.error(),
             error_target: NotNan::new(self.absolute_tolerance).unwrap(),
-            number_of_function_evaluations: 0,
+            number_of_function_evaluations: 2 * self.m + 1,
         };
 
         while tracker.error > tracker.error_target {
@@ -127,7 +127,7 @@ where
             integral: segments.result(),
             error: segments.error(),
             error_target: NotNan::new(self.absolute_tolerance).unwrap(),
-            number_of_function_evaluations: 0,
+            number_of_function_evaluations: (2 * self.m + 1) * segments.len(),
         };
 
         while tracker.error > tracker.error_target {

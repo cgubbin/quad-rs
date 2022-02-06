@@ -31,7 +31,7 @@ fn main() {
     let range = -1f64..1f64;
 
     let result = integrator
-          .integrate(&integrand, range, None)
+		        .integrate(&integrand, range, None)
             .unwrap();
 }
 ```
@@ -60,12 +60,12 @@ fn integrand(z: Complex<f64>) -> Complex<f64> {
 fn main() {
     let integrator = GaussKronrod::default();
     let range = Range {
-   start: Complex::new(-1f64, -1f64),
-   end: Complex::new(1f64, 1f64)
-  };
+			start: Complex::new(-1f64, -1f64),
+			end: Complex::new(1f64, 1f64)
+		};
 
     let result = integrator
-          .integrate(&integrand, range, None)
+		        .integrate(&integrand, range, None)
             .unwrap();
 }
 ```
@@ -83,9 +83,8 @@ quad_rs = "0.1.0"
 :
 
 ```rust
-use quad_rs::{Contour, GaussKronrod, Integrate};
+use quad_rs::{Contour, Direction, GaussKronrod, Integrate};
 use num_complex::Complex;
-use std::ops::Range;
 
 fn integrand(z: Complex<f64>) -> Complex<f64> {
     z.exp()
@@ -98,7 +97,7 @@ fn main() {
     let contour = Contour::generate_rectangular(&x_range, &y_range, Direction::Clockwise);
 
     let result = integrator
-          .path_integrate(&integrand, contour)
+		        .path_integrate(&integrand, contour)
             .unwrap();
 }
 ```
