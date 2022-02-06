@@ -14,7 +14,7 @@ Dependencies:
 
 ```toml
 [dependencies]
-quad_rs = "0.1.0"
+quad_rs = "0.1"
 ```
 
 :
@@ -43,7 +43,7 @@ Dependencies:
 ```toml
 [dependencies]
 num_complex = "0.4.0"
-quad_rs = "0.1.0"
+quad_rs = "0.1"
 ```
 
 :
@@ -77,7 +77,7 @@ Dependencies:
 ```toml
 [dependencies]
 num_complex = "0.4.0"
-quad_rs = "0.1.0"
+quad_rs = "0.1"
 ```
 
 :
