@@ -5,7 +5,7 @@ edition = "2021"
 authors = ["Christopher R. Gubbin <cgubbin@protonmail.com>"]
 description = "Adaptive Gauss-Kronrod Integration in Rust"
 categories = ["mathematics", "science"]
-keywords = ["integration", "math", "physics"]
+keywords = ["integration", "math", "physics", "numerical"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/cgubbin/quad-rs/"
 homepage = "https://github.com/cgubbin/quad-rs/"
@@ -20,6 +20,4 @@ ordered-float = "2.10.0"
 thiserror = "1.0.30"
 
 [dev-dependencies]
-approx = "0.5.1"
 rand = "0.8.4"
-
