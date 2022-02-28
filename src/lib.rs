@@ -2,14 +2,15 @@
 //!
 //! # Examples
 //! ```no_run
-//! use quad_rs::{GaussKronrod, Integrate};
+//! use quad_rs::prelude::*;
 //!
 //! fn integrand(x: f64) -> f64 {
 //!     x.exp()
 //! }
 //!
 //! fn main() {
-//!     let integrator = GaussKronrod::default();
+//!     let integrator = GaussKronrod::default()
+//!         .with_maximum_function_evaluations(200);
 //!     let range = -1f64..1f64;
 //!     let result = integrator
 //!       .integrate(&integrand, range, None)
