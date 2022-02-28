@@ -1,5 +1,5 @@
 use crate::{Contour, IntegrationError, IntegrationResult};
-use nalgebra::ComplexField;
+use nalgebra::{ComplexField, RealField};
 use num_traits::FromPrimitive;
 
 pub trait Integrate<T, F>
@@ -23,16 +23,21 @@ where
         function: F,
         path: Contour<T>,
     ) -> Result<IntegrationResult<T>, IntegrationError<T>>;
+}
 
+pub trait IntegrationSettings<N>
+where
+    N: RealField + FromPrimitive + PartialOrd + Copy,
+{
     /// Set the relative tolerance for the integrator
-    fn with_relative_tolerance(&mut self, relative_tolerance: T::RealField) -> &mut Self;
+    fn with_relative_tolerance(self, relative_tolerance: N) -> Self;
 
     /// Set the absolute tolerance for the integrator
-    fn with_absolute_tolerance(&mut self, absolute_tolerance: T::RealField) -> &mut Self;
+    fn with_absolute_tolerance(self, absolute_tolerance: N) -> Self;
 
-    /// Set the maximum iterations for the integrator
-    fn with_maximum_iterations(&mut self, maximum_iterations: usize) -> &mut Self;
+    /// Set the maximum number of function evaluations for the integrator
+    fn with_maximum_function_evaluations(self, maximum_evaluations: usize) -> Self;
 
     /// Set the minimum segment length for the integrator
-    fn with_minimum_segment_width(&mut self, minimum_segment_width: T::RealField) -> &mut Self;
+    fn with_minimum_segment_width(self, minimum_segment_width: N) -> Self;
 }
