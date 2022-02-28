@@ -1,4 +1,4 @@
-use crate::{Contour, Integrate, IntegrationError, IntegrationResult};
+use crate::{Contour, Integrate, IntegrationError, IntegrationResult, IntegrationSettings};
 use nalgebra::{ComplexField, RealField};
 use num_traits::{Float, FromPrimitive};
 
@@ -180,23 +180,28 @@ where
     ) -> Result<IntegrationResult<T>, IntegrationError<T>> {
         self.quad_contour(&f, &range.range)
     }
+}
 
-    fn with_absolute_tolerance(&mut self, absolute_tolerance: T::RealField) -> &mut Self {
+impl<N> IntegrationSettings<N> for GaussKronrod<N>
+where
+    N: RealField + FromPrimitive + PartialOrd + Copy,
+{
+    fn with_absolute_tolerance(&mut self, absolute_tolerance: N) -> &mut Self {
         self.absolute_tolerance = absolute_tolerance;
         self
     }
 
-    fn with_relative_tolerance(&mut self, relative_tolerance: T::RealField) -> &mut Self {
+    fn with_relative_tolerance(&mut self, relative_tolerance: N) -> &mut Self {
         self.relative_tolerance = relative_tolerance;
         self
     }
 
-    fn with_maximum_iterations(&mut self, maximum_iterations: usize) -> &mut Self {
-        self.maximum_number_of_function_evaluations = maximum_iterations;
+    fn with_maximum_function_evaluations(&mut self, maximum_evaluations: usize) -> &mut Self {
+        self.maximum_number_of_function_evaluations = maximum_evaluations;
         self
     }
 
-    fn with_minimum_segment_width(&mut self, minimum_segment_width: T::RealField) -> &mut Self {
+    fn with_minimum_segment_width(&mut self, minimum_segment_width: N) -> &mut Self {
         self.minimum_segment_width = minimum_segment_width;
         self
     }
