@@ -20,7 +20,7 @@ quad_rs = "0.1"
 :
 
 ```rust
-use quad_rs::{GaussKronrod, Integrate};
+use quad_rs::prelude::*;
 
 fn integrand(x: f64) -> f64 {
     x.exp()
@@ -49,7 +49,7 @@ quad_rs = "0.1"
 :
 
 ```rust
-use quad_rs::{GaussKronrod, Integrate};
+use quad_rs::prelude::*;
 use num_complex::Complex;
 use std::ops::Range;
 
@@ -83,7 +83,7 @@ quad_rs = "0.1"
 :
 
 ```rust
-use quad_rs::{Contour, Direction, GaussKronrod, Integrate};
+use quad_rs::{Contour, Direction, prelude::*};
 use num_complex::Complex;
 
 fn integrand(z: Complex<f64>) -> Complex<f64> {
