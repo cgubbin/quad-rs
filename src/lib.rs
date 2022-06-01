@@ -26,6 +26,8 @@ mod contour;
 mod error;
 /// Gauss-Kronrod core
 mod gauss_kronrod;
+/// Methods to generate weights and points for use in external crates
+mod generate;
 /// Integration traits
 mod integrate;
 /// Re-export of the driving traits and integrator

@@ -36,7 +36,51 @@ pub struct GaussKronrod<N> {
     minimum_segment_width: N,
 }
 
-impl Default for GaussKronrod<f64> {
+// impl Default for GaussKronrod<f64> {
+//     /// Initialise a default integrator, this uses Gauss-Legendre order
+//     /// 10 and Gauss-Kronrod order 21. It uses precomputed values for the
+//     /// abscissa and weights, saving the initial build time
+//     fn default() -> Self {
+//         let m = 10;
+//         let n = m + 1;
+
+//         GaussKronrod {
+//             m,
+//             n,
+//             xgk: pre::XGK_10_F64.into(),
+//             wg: pre::WG_10_F64.into(),
+//             wgk: pre::WGK_10_F64.into(),
+//             relative_tolerance: 1.49e-08,
+//             absolute_tolerance: 1.49e-08,
+//             maximum_number_of_function_evaluations: 5000,
+//             minimum_segment_width: 1e-8,
+//         }
+//     }
+// }
+
+// impl Default for GaussKronrod<f32> {
+//     /// Initialise a default integrator, this uses Gauss-Legendre order
+//     /// 10 and Gauss-Kronrod order 21. It uses precomputed values for the
+//     /// abscissa and weights, saving the initial build time
+//     fn default() -> Self {
+//         let m = 10;
+//         let n = m + 1;
+
+//         GaussKronrod {
+//             m,
+//             n,
+//             xgk: pre::XGK_10_F32.into(),
+//             wg: pre::WG_10_F32.into(),
+//             wgk: pre::WGK_10_F32.into(),
+//             relative_tolerance: 1.49e-08,
+//             absolute_tolerance: 1.49e-08,
+//             maximum_number_of_function_evaluations: 5000,
+//             minimum_segment_width: 1e-8,
+//         }
+//     }
+// }
+
+impl<T: RealField + FromPrimitive> Default for GaussKronrod<T> {
     /// Initialise a default integrator, this uses Gauss-Legendre order
     /// 10 and Gauss-Kronrod order 21. It uses precomputed values for the
     /// abscissa and weights, saving the initial build time
@@ -44,38 +88,29 @@ impl Default for GaussKronrod<f64> {
         let m = 10;
         let n = m + 1;
 
-        GaussKronrod {
-            m,
-            n,
-            xgk: pre::XGK_10_F64.into(),
-            wg: pre::WG_10_F64.into(),
-            wgk: pre::WGK_10_F64.into(),
-            relative_tolerance: 1.49e-08,
-            absolute_tolerance: 1.49e-08,
-            maximum_number_of_function_evaluations: 5000,
-            minimum_segment_width: 1e-8,
-        }
-    }
-}
-
-impl Default for GaussKronrod<f32> {
-    /// Initialise a default integrator, this uses Gauss-Legendre order
-    /// 10 and Gauss-Kronrod order 21. It uses precomputed values for the
-    /// abscissa and weights, saving the initial build time
-    fn default() -> Self {
-        let m = 10;
-        let n = m + 1;
+        let xgk = pre::XGK_10_F64
+            .into_iter()
+            .map(|val| T::from_f64(val).unwrap())
+            .collect::<Vec<_>>();
+        let wg = pre::WG_10_F64
+            .into_iter()
+            .map(|val| T::from_f64(val).unwrap())
+            .collect::<Vec<_>>();
+        let wgk = pre::WGK_10_F64
+            .into_iter()
+            .map(|val| T::from_f64(val).unwrap())
+            .collect::<Vec<_>>();
 
         GaussKronrod {
             m,
             n,
-            xgk: pre::XGK_10_F32.into(),
-            wg: pre::WG_10_F32.into(),
-            wgk: pre::WGK_10_F32.into(),
-            relative_tolerance: 1.49e-08,
-            absolute_tolerance: 1.49e-08,
+            xgk,
+            wg,
+            wgk,
+            relative_tolerance: T::from_f64(1.49e-08).unwrap(),
+            absolute_tolerance: T::from_f64(1.49e-08).unwrap(),
             maximum_number_of_function_evaluations: 5000,
-            minimum_segment_width: 1e-8,
+            minimum_segment_width: T::from_f64(1e-8).unwrap(),
         }
     }
 }
@@ -179,6 +214,106 @@ where
         range: Contour<T>,
     ) -> Result<IntegrationResult<T>, IntegrationError<T>> {
         self.quad_contour(&f, &range.range)
+    }
+}
+
+impl<T> crate::generate::Generate<T> for GaussKronrod<T>
+where
+    T: RealField + FromPrimitive + Copy,
+{
+    fn generate(
+        &self,
+        range: std::ops::Range<T>,
+        evaluation_points: Option<Vec<T>>,
+        target_number_of_points: usize,
+    ) -> (Vec<T>, Vec<T>) {
+        // Form the full 21 point weights and points for a single segment
+
+        let number_of_points_per_segment = self.xgk.len() * 2 - 1;
+        let mut scaled_points = vec![T::zero(); number_of_points_per_segment];
+        scaled_points
+            .iter_mut()
+            .zip(self.xgk.iter())
+            .for_each(|(x, &y)| *x = -y);
+        scaled_points
+            .iter_mut()
+            .skip(self.xgk.len() - 1)
+            .zip(self.xgk.iter().rev())
+            .for_each(|(x, &y)| *x = y);
+        let mut gk_weights = vec![T::zero(); number_of_points_per_segment];
+        gk_weights
+            .iter_mut()
+            .zip(self.wgk.iter())
+            .for_each(|(x, &y)| *x = y);
+        gk_weights
+            .iter_mut()
+            .skip(self.wgk.len() - 1)
+            .zip(self.wgk.iter().rev())
+            .for_each(|(x, &y)| *x = y);
+
+        // The points and weights for the full domain
+        let mut points = Vec::new();
+        let mut weights = Vec::new();
+
+        if evaluation_points.is_none() {
+            // The last segment has `number_of_points_per_segment`
+            // while all others share a point at the boundary, having one less
+            let number_of_segments = (target_number_of_points - number_of_points_per_segment)
+                / (number_of_points_per_segment - 1)
+                + 2;
+            let segment_width =
+                (range.end - range.start) / (T::from_usize(number_of_segments).unwrap());
+
+            for idx in 0..number_of_segments {
+                let segment_start = T::from_usize(idx).unwrap() * segment_width;
+                let segment_end = segment_start + segment_width;
+                let segment_midpoint = (segment_start + segment_end) / T::from_f64(2.).unwrap();
+                let points_in_segment = scaled_points
+                    .iter()
+                    .map(|&x| x / T::from_f64(2.).unwrap() * segment_width + segment_midpoint)
+                    .take(number_of_points_per_segment - 1);
+                let weights_in_segment = gk_weights.iter().take(number_of_points_per_segment - 1);
+                points.extend(points_in_segment);
+                weights.extend(weights_in_segment);
+            }
+            points.push(range.end);
+            weights.push(gk_weights[gk_weights.len() - 1]);
+        } else {
+            let e_points = evaluation_points.unwrap();
+            let number_of_segments = (target_number_of_points - number_of_points_per_segment)
+                / (number_of_points_per_segment - 1)
+                + 2
+                - e_points.len();
+            let segment_width =
+                (range.end - range.start) / (T::from_usize(number_of_segments).unwrap());
+            let mut segment_points = (0..number_of_segments)
+                .map(|n| T::from_usize(n).unwrap() * segment_width)
+                .chain(e_points.into_iter())
+                .collect::<Vec<_>>();
+            segment_points.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            segment_points.push(range.end);
+            let segment_widths = segment_points
+                .windows(2)
+                .map(|x| x[1] - x[0])
+                .collect::<Vec<_>>();
+
+            for (segment_width, segment_start) in
+                segment_widths.into_iter().zip(segment_points.into_iter())
+            {
+                let segment_end = segment_start + segment_width;
+                let segment_midpoint = (segment_start + segment_end) / T::from_f64(2.).unwrap();
+                let points_in_segment = scaled_points
+                    .iter()
+                    .map(|&x| x / T::from_f64(2.).unwrap() * segment_width + segment_midpoint)
+                    .take(number_of_points_per_segment - 1);
+                let weights_in_segment = gk_weights.iter().take(number_of_points_per_segment - 1);
+                points.extend(points_in_segment);
+                weights.extend(weights_in_segment);
+            }
+            points.push(range.end);
+            weights.push(gk_weights[gk_weights.len() - 1]);
+        }
+        (points, weights)
     }
 }
 
