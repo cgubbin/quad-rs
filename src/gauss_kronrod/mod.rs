@@ -268,11 +268,15 @@ where
                 let segment_start = T::from_usize(idx).unwrap() * segment_width;
                 let segment_end = segment_start + segment_width;
                 let segment_midpoint = (segment_start + segment_end) / T::from_f64(2.).unwrap();
+                let segment_half_length = (segment_end - segment_start) / T::from_f64(2.).unwrap();
                 let points_in_segment = scaled_points
                     .iter()
                     .map(|&x| x / T::from_f64(2.).unwrap() * segment_width + segment_midpoint)
                     .take(number_of_points_per_segment - 1);
-                let weights_in_segment = gk_weights.iter().take(number_of_points_per_segment - 1);
+                let weights_in_segment = gk_weights
+                    .iter()
+                    .take(number_of_points_per_segment - 1)
+                    .map(|x| *x * segment_half_length);
                 points.extend(points_in_segment);
                 weights.extend(weights_in_segment);
             }
