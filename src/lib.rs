@@ -40,6 +40,7 @@ mod segments;
 pub use contour::{split_range_around_singularities, Contour, Direction};
 pub use error::IntegrationError;
 pub use gauss_kronrod::GaussKronrod;
+pub use generate::Generate;
 pub use integrate::{Integrate, IntegrationSettings};
 pub use result::IntegrationResult;
 pub use segments::{Segment, Segments};
