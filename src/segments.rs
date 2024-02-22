@@ -1,5 +1,5 @@
 use super::{IntegrableFloat, IntegrationError, IntegrationOutput};
-use nalgebra::ComplexField;
+use nalgebra::{ComplexField, RealField};
 use num_traits::{float::Float, ToPrimitive, Zero};
 use ordered_float::NotNan;
 use serde::{Deserialize, Serialize};
@@ -10,37 +10,32 @@ use std::ops::Range;
 
 #[derive(Clone, Default, Debug, Deserialize, Serialize)]
 // Holds all the `Segment` comprising the integration region
-pub struct SegmentHeap<I, O>
-where
-    I: ComplexField,
-    O: IntegrationOutput<Float = <I as ComplexField>::RealField>,
-    <I as ComplexField>::RealField: IntegrableFloat,
-{
+pub struct SegmentHeap<I, O, F: PartialEq + PartialOrd> {
     // Segments are held on a `BinaryHeap`, ordered by the error on each segment
-    inner: BinaryHeap<Segment<I, O>>,
+    inner: BinaryHeap<Segment<I, O, F>>,
 }
 
-impl<I, O> SegmentHeap<I, O>
+impl<I, O, F> SegmentHeap<I, O, F>
 where
-    I: ComplexField,
-    O: IntegrationOutput<Float = <I as ComplexField>::RealField>,
-    <I as ComplexField>::RealField: IntegrableFloat,
+    I: ComplexField<RealField = F>,
+    O: IntegrationOutput<Float = F>,
+    F: IntegrableFloat,
 {
-    pub fn new() -> Self {
+    pub fn empty() -> Self {
         Self {
             inner: BinaryHeap::new(),
         }
     }
 
-    pub fn iter(&self) -> Iter<'_, Segment<I, O>> {
+    pub fn iter(&self) -> Iter<'_, Segment<I, O, F>> {
         self.inner.iter()
     }
 
-    pub fn push(&mut self, item: Segment<I, O>) {
+    pub fn push(&mut self, item: Segment<I, O, F>) {
         self.inner.push(item);
     }
 
-    pub fn pop(&mut self) -> Option<Segment<I, O>> {
+    pub fn pop(&mut self) -> Option<Segment<I, O, F>> {
         self.inner.pop()
     }
 
@@ -48,7 +43,7 @@ where
     //
     // Whereas a SegmentHeap is ordered by the Error on each Segment, the Vector returned here is
     // ordered by the Segment Midpoint.
-    pub fn into_input_ordered(self) -> Vec<Segment<I, O>> {
+    pub fn into_input_ordered(self) -> Vec<Segment<I, O, F>> {
         let mut segments = self.inner.into_vec();
         // TODO: This sorts by the start: is this sufficient?
         // TODO: Sorting on the real part will fail when looking at contour integration, this
@@ -70,21 +65,15 @@ where
 ///
 /// The input type `I` is scalar, while the output can be scalar, vector or array valued depending
 /// on the implementation.
-pub struct Segment<I, O>
-where
-    I: ComplexField,
-    O: IntegrationOutput<Float = <I as ComplexField>::RealField>,
-    <I as ComplexField>::RealField: IntegrableFloat,
-{
+pub struct Segment<I, O, F: PartialOrd + PartialEq> {
     /// The range over which the segment exists
     pub range: Range<I>,
     /// The result of integration over the segment
     pub result: O,
     /// The error associated with the integration
-    #[serde(skip, default = "default_error")]
-    pub error: NotNan<<O as IntegrationOutput>::Float>,
+    pub error: F,
     /// Potential data containing points, weights and local values of the integrand
-    pub data: Option<SegmentData<I, O>>,
+    pub data: Option<SegmentData<I, O, F>>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -92,25 +81,20 @@ where
 ///
 /// This is useful for situations where we want both the integrated quantity, and
 /// visibility over the integrand.
-pub struct SegmentData<I, O>
-where
-    I: ComplexField,
-    O: IntegrationOutput<Float = <I as ComplexField>::RealField>,
-    <I as ComplexField>::RealField: IntegrableFloat,
-{
+pub struct SegmentData<I, O, F> {
     /// Ordered vector of evaluation points
     pub points: Vec<I>,
     ///  vector of evaluation weights of same length and order as points
-    pub weights: Vec<O::Float>,
+    pub weights: Vec<F>,
     ///  vector of evaluation values of same length and order as points
     pub values: Vec<O>,
 }
 
-impl<I, O> SegmentData<I, O>
+impl<I, O, F> SegmentData<I, O, F>
 where
-    I: ComplexField + Copy,
-    O: IntegrationOutput<Float = <I as ComplexField>::RealField>,
-    <I as ComplexField>::RealField: IntegrableFloat,
+    I: ComplexField<RealField = F> + Copy,
+    O: IntegrationOutput<Float = F>,
+    F: IntegrableFloat,
 {
     pub(crate) fn from_gauss_kronrod_data(
         // Output for points to the left of the segment center
@@ -123,13 +107,13 @@ where
         // correspond to the weights for the `output_left`, the last to that for `output_center`
         //
         // Weights for output_right are those for `output_left, reversed
-        bare_weights: &[O::Float],
+        bare_weights: &[F],
         // The centre of the range
         center: I,
         // Half the segment length
         half_length: I,
         // xgk
-        xgk: &[O::Float],
+        xgk: &[F],
     ) -> Self {
         // Concatenate all points to a flat vector in order
         let mut values = output_left.to_vec();
@@ -149,7 +133,9 @@ where
         // Scale the weights by the segment length
         // The provided weights are those for Gauss-Kronrod on the unit segment, when we evaluate
         // the rate in the end they have to be multiplied by the segment half width
-        weights.iter_mut().for_each(|w| *w *= half_length.modulus());
+        weights
+            .iter_mut()
+            .for_each(|w| *w = *w * half_length.modulus());
 
         let mut points = xgk
             .iter()
@@ -189,28 +175,24 @@ where
     }
 }
 
-fn default_error<F: Float>() -> NotNan<F> {
-    NotNan::new(F::zero()).unwrap()
-}
-
-pub trait Segments<I, O>
+pub trait Segments<O, F>
 where
-    O: IntegrationOutput,
+    O: IntegrationOutput<Float = F>,
 {
-    fn error(&self) -> NotNan<O::Float>;
+    fn error(&self) -> NotNan<F>;
     fn result(&self) -> O;
 }
 
-impl<I, O> Segment<I, O>
+impl<I, O, F> Segment<I, O, F>
 where
-    I: ComplexField + Copy + ToPrimitive,
-    O: IntegrationOutput<Float = <I as ComplexField>::RealField>,
-    <I as ComplexField>::RealField: IntegrableFloat,
+    I: ComplexField<RealField = F> + Copy + ToPrimitive,
+    O: IntegrationOutput<Float = F>,
+    F: IntegrableFloat,
 {
     /// Check whether a segment is larger than a user-defined cutoff
     /// If it is not then it indicates the presence of a non-integrable
     /// singularity within the segment.
-    pub fn is_wide_enough(&self, minimum_width: &O::Float) -> Result<(), IntegrationError<I>> {
+    pub fn is_wide_enough(&self, minimum_width: &F) -> Result<(), IntegrationError<I>> {
         if (self.range.end - self.range.start).abs() < *minimum_width {
             Err(IntegrationError::PossibleSingularity {
                 singularity: { (self.range.start + self.range.end) / I::from_f64(2.).unwrap() },
@@ -221,15 +203,16 @@ where
     }
 }
 
-impl<I, O> Segments<I, O> for SegmentHeap<I, O>
+impl<I, O, F> Segments<O, F> for SegmentHeap<I, O, F>
 where
-    I: ComplexField + Copy,
-    O: IntegrationOutput<Float = <I as ComplexField>::RealField>,
-    <I as ComplexField>::RealField: IntegrableFloat,
+    I: ComplexField<RealField = F> + Copy,
+    O: IntegrationOutput<Float = F>,
+    F: IntegrableFloat,
 {
-    fn error(&self) -> NotNan<O::Float> {
-        self.iter()
-            .fold(NotNan::new(O::Float::zero()).unwrap(), |x, y| x + y.error)
+    fn error(&self) -> NotNan<F> {
+        self.iter().fold(NotNan::new(F::zero()).unwrap(), |x, y| {
+            x + NotNan::new(y.error).unwrap()
+        })
     }
 
     fn result(&self) -> O {
@@ -244,43 +227,31 @@ where
     }
 }
 
-impl<I, O> PartialOrd for Segment<I, O>
+impl<I, O, F> PartialOrd for Segment<I, O, F>
 where
-    I: ComplexField,
-    O: IntegrationOutput<Float = <I as ComplexField>::RealField>,
-    <I as ComplexField>::RealField: IntegrableFloat,
+    F: PartialEq + PartialOrd,
 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<I, O> Ord for Segment<I, O>
+impl<I, O, F> Ord for Segment<I, O, F>
 where
-    I: ComplexField,
-    O: IntegrationOutput<Float = <I as ComplexField>::RealField>,
-    <I as ComplexField>::RealField: IntegrableFloat,
+    F: PartialEq + PartialOrd,
 {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.error.cmp(&other.error)
+        self.error.partial_cmp(&other.error).unwrap()
     }
 }
 
-impl<I, O> PartialEq for Segment<I, O>
+impl<I, O, F> PartialEq for Segment<I, O, F>
 where
-    I: ComplexField,
-    O: IntegrationOutput<Float = <I as ComplexField>::RealField>,
-    <I as ComplexField>::RealField: IntegrableFloat,
+    F: PartialEq + PartialOrd,
 {
     fn eq(&self, other: &Self) -> bool {
         self.error == other.error
     }
 }
 
-impl<I, O> Eq for Segment<I, O>
-where
-    I: ComplexField,
-    O: IntegrationOutput<Float = <I as ComplexField>::RealField>,
-    <I as ComplexField>::RealField: IntegrableFloat,
-{
-}
+impl<I, O, F> Eq for Segment<I, O, F> where F: PartialEq + PartialOrd {}

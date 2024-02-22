@@ -3,9 +3,11 @@
 use crate::EvaluationError;
 use num_traits::float::{Float, FloatCore};
 use serde::{de::DeserializeOwned, Serialize};
+use std::fmt::{Debug, Display};
+use trellis::TrellisFloat;
 
 pub trait IntegrableFloat:
-    Clone + std::fmt::Debug + FloatCore + Float + DeserializeOwned + Serialize
+    Clone + Debug + Display + FloatCore + Float + Serialize + DeserializeOwned + PartialOrd + PartialEq + TrellisFloat
 {
 }
 
@@ -28,6 +30,7 @@ pub trait IntegrationOutput:
     Clone
     + argmin_math::ArgminMul<<Self as IntegrationOutput>::Float, Self>
     + argmin_math::ArgminAdd<Self, Self>
+    + argmin_math::ArgminL2Norm<Self::Float>
 {
     // The real part of `IntegrationOutput`. For real `IntegrationOutput` this is `Self`.
     type Real;
