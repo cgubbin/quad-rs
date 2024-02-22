@@ -8,17 +8,32 @@
 use nalgebra::RealField;
 use num_traits::FromPrimitive;
 
-pub trait Generate<T>
+pub struct IntegrationValues<F> {
+    pub(crate) evaluation_points: Vec<F>,
+    pub(crate) weights: Vec<F>,
+}
+
+impl<F> IntegrationValues<F> {
+    pub(crate) fn evaluation_points(&self) -> &[F] {
+        &self.evaluation_points[..]
+    }
+
+    pub(crate) fn weights(&self) -> &[F] {
+        &self.weights[..]
+    }
+}
+
+pub trait Generate<F>
 where
-    T: RealField + FromPrimitive + Copy,
+    F: RealField + FromPrimitive + Copy,
 {
     /// Generates the weights and evaluation points over the target range
     fn generate(
         &self,
-        range: std::ops::Range<T>,
-        evaluation_points: Option<Vec<T>>,
+        range: std::ops::Range<F>,
+        evaluation_points: Option<Vec<F>>,
         target_number_of_points: usize,
-    ) -> (Vec<T>, Vec<T>);
+    ) -> IntegrationValues<F>;
 }
 
 #[cfg(test)]
@@ -34,7 +49,7 @@ mod test {
         let integrator = GaussKronrod::default();
         let res = integrator.generate(range, None, 100);
 
-        println!("len: {}, {}", res.0.len(), res.1.len());
+        println!("len: {}, {}", res.evaluation_points.len(), res.weights.len());
     }
 
     #[test]
@@ -48,7 +63,7 @@ mod test {
         let integrator = GaussKronrod::default();
         let res = integrator.generate(range, points, 200);
 
-        println!("len: {}, {}", res.0.len(), res.1.len());
+        println!("len: {}, {}", res.evaluation_points.len(), res.weights.len());
         println!("res: {:?}", res);
     }
 }
