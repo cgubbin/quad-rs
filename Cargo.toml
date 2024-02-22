@@ -13,11 +13,14 @@ readme = "README.md"
 
 [dependencies]
 approx = "0.5.1"
+argmin-math = "0.3.0"
 nalgebra = "=0.30.0"
 num-complex = "0.4.0"
 num-traits = "0.2.14"
 ordered-float = "2.10.0"
+serde = { version = "1.0.197", features = ["derive"] }
 thiserror = "1.0.30"
+trellis = { path = "../../../sensorium/tooling/runner", default-features = false }
 
 [dev-dependencies]
 rand = "0.8.4"

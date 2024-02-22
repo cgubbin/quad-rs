@@ -10,3 +10,9 @@ pub enum IntegrationError<T> {
     #[error("The integrator has no solution")]
     NoSolution,
 }
+
+#[derive(thiserror::Error, Debug)]
+pub enum EvaluationError<I> {
+    #[error("Possible singularity near {singularity:?}")]
+    PossibleSingularity { singularity: I },
+}
