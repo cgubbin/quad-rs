@@ -15,12 +15,18 @@ readme = "README.md"
 approx = "0.5.1"
 argmin-math = "0.3.0"
 nalgebra = "=0.30.0"
+ndarray = { version = "0.15.6", optional = true }
+ndarray-stats = { version = "0.5.1", optional = true }
 num-complex = "0.4.0"
 num-traits = "0.2.14"
 ordered-float = "2.10.0"
+rayon = "1.8.1"
 serde = { version = "1.0.197", features = ["derive"] }
 thiserror = "1.0.30"
 trellis = { path = "../../../sensorium/tooling/runner", default-features = false }
+
+[features]
+ndarray = ["dep:ndarray", "dep:ndarray-stats"]
 
 [dev-dependencies]
 rand = "0.8.4"

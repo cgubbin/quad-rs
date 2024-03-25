@@ -166,8 +166,13 @@ where
     //
     // This method is primarily useful for internal consistency checking.
     pub(crate) fn integral(&self) -> O {
-        let vals = self.weights.iter().zip(&self.values).map(|(w, v)| v.mul(w));
-        let mut res = self.values[0].mul(&I::zero().real());
+        // let vals = self.weights.iter().zip(&self.values).map(|(w, v)| v.mul(w));
+        let vals = self
+            .weights
+            .iter()
+            .zip(&self.values)
+            .map(|(w, v)| v.mul(&<O as IntegrationOutput>::Scalar::from_real(*w)));
+        let mut res = self.values[0].mul(&<O as IntegrationOutput>::Scalar::from_real(F::zero()));
         for val in vals {
             res = res.add(&val);
         }
