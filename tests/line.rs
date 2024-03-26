@@ -1,5 +1,5 @@
-use num_complex::Complex;
-/// Tests for the integration module
+// use num_complex::Complex;
+// Tests for the integration module
 // use quad_rs::{GaussKronrod, Integrable};
 
 // /// Integrate `e^x` along the real line from -1 -> 1. The analytical

@@ -49,7 +49,11 @@ mod test {
         let integrator = GaussKronrod::default();
         let res = integrator.generate(range, None, 100);
 
-        println!("len: {}, {}", res.evaluation_points.len(), res.weights.len());
+        println!(
+            "len: {}, {}",
+            res.evaluation_points.len(),
+            res.weights.len()
+        );
     }
 
     #[test]
@@ -63,7 +67,11 @@ mod test {
         let integrator = GaussKronrod::default();
         let res = integrator.generate(range, points, 200);
 
-        println!("len: {}, {}", res.evaluation_points.len(), res.weights.len());
+        println!(
+            "len: {}, {}",
+            res.evaluation_points.len(),
+            res.weights.len()
+        );
         println!("res: {:?}", res);
     }
 }

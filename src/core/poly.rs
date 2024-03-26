@@ -118,7 +118,10 @@ where
     /**
      * Find the corresponding Gauss-Kronrod weight coefficients
      */
-    pub(crate) fn compute_gauss_kronrod_weights(gauss_kronrod_abscissae: &[F], coeffs: &[F]) -> Weights<F> {
+    pub(crate) fn compute_gauss_kronrod_weights(
+        gauss_kronrod_abscissae: &[F],
+        coeffs: &[F],
+    ) -> Weights<F> {
         let n = gauss_kronrod_abscissae.len();
         let m = n - 1;
 
@@ -156,7 +159,10 @@ where
                 }
             })
             .collect();
-        Weights { gauss: gauss_weights, gauss_kronrod: gauss_kronrod_weights }
+        Weights {
+            gauss: gauss_weights,
+            gauss_kronrod: gauss_kronrod_weights,
+        }
     }
 
     /**
