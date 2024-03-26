@@ -1,6 +1,6 @@
 use super::{IntegrableFloat, IntegrationError, IntegrationOutput};
-use nalgebra::{ComplexField, RealField};
-use num_traits::{float::Float, ToPrimitive, Zero};
+use nalgebra::ComplexField;
+use num_traits::ToPrimitive;
 use ordered_float::NotNan;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;

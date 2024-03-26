@@ -1,20 +1,20 @@
 use crate::{state::IntegrationState, IntegrableFloat, IntegrationError, IntegrationOutput};
 use nalgebra::ComplexField;
 
-impl<I, O, F> Into<IntegrationResult<I, O>> for IntegrationState<I, O, F>
+impl<I, O, F> From<IntegrationState<I, O, F>> for IntegrationResult<I, O>
 where
     O: IntegrationOutput<Float = F> + Clone,
     I: ComplexField<RealField = F> + Copy,
     F: IntegrableFloat,
 {
-    fn into(self) -> IntegrationResult<I, O> {
+    fn from(val: IntegrationState<I, O, F>) -> Self {
         IntegrationResult {
-            running_time: self.time,
+            running_time: val.time,
             number_of_function_evaluations: 0,
-            result: self.integral.clone(),
-            error: Some(self.error),
-            values: if self.accumulate_values {
-                self.into_resolved()
+            result: val.integral.clone(),
+            error: Some(val.error),
+            values: if val.accumulate_values {
+                val.into_resolved()
             } else {
                 None
             },

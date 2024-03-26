@@ -1,13 +1,13 @@
 use nalgebra::{ComplexField, RealField};
-use num_traits::{float::FloatCore, Float, FromPrimitive, ToPrimitive};
-use serde::{de::DeserializeOwned, Serialize};
+use num_traits::{FromPrimitive};
+
 use std::ops::Range;
 use trellis::{Calculation, Problem, KV};
 
 use crate::{
     contour::{split_range_around_singularities, Direction},
     AccumulateError, Contour, GaussKronrod, GaussKronrodCore, Integrable, IntegrableFloat,
-    IntegrationError, IntegrationOutput, IntegrationState, RescaleError, Segment,
+    IntegrationError, IntegrationOutput, IntegrationState, RescaleError,
 };
 
 #[derive(Debug)]

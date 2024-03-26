@@ -2,10 +2,8 @@ use super::super::split_range_once_around_singularity;
 use super::GaussKronrod;
 use super::{IntegrationError, Segment, SegmentData};
 use crate::{AccumulateError, IntegrableFloat, IntegrationOutput, RescaleError};
-use argmin_math::{ArgminAdd, ArgminMul};
 use nalgebra::{ComplexField, RealField};
-use num_traits::{float::FloatCore, Float, FromPrimitive};
-use ordered_float::NotNan;
+use num_traits::{Float, FromPrimitive};
 use rayon::prelude::*;
 use std::ops::Range;
 
@@ -112,8 +110,7 @@ where
             result_gauss = Some(f_center.mul(&I::from_real(self.wg[self.n / 2 - 1])));
         }
         let fv1 = (0..self.n)
-            // .into_par_iter()
-            .into_iter()
+            .into_par_iter()
             .map(|jj| {
                 let abscissa = half_length.scale(self.xgk[jj]);
                 let fval = integrand(center - abscissa);
@@ -127,8 +124,7 @@ where
             .collect::<Result<Vec<_>, _>>()?;
 
         let fv2 = (0..self.n)
-            // .into_par_iter()
-            .into_iter()
+            .into_par_iter()
             .map(|jj| {
                 let abscissa = half_length.scale(self.xgk[jj]);
                 let fval = integrand(center + abscissa);
