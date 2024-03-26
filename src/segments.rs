@@ -17,8 +17,8 @@ pub struct SegmentHeap<I, O, F: PartialEq + PartialOrd> {
 
 impl<I, O, F> SegmentHeap<I, O, F>
 where
-    I: ComplexField<RealField = F>,
     O: IntegrationOutput<Float = F>,
+    I: ComplexField<RealField = F>,
     F: IntegrableFloat,
 {
     pub fn empty() -> Self {

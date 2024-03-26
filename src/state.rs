@@ -44,12 +44,14 @@ where
     pub time: Option<trellis::Duration>,
     /// Status of optimization execution
     pub termination_status: Status,
+    /// Whether to accumulate resolved values in the output
+    pub accumulate_values: bool,
 }
 
 impl<I, O, F> IntegrationState<I, O, F>
 where
+    O: IntegrationOutput<Float = F>,
     I: ComplexField<RealField = F> + Copy,
-    O: IntegrationOutput<Scalar = I, Float = F>,
     F: IntegrableFloat,
 {
     #[must_use]
@@ -161,7 +163,7 @@ where
 impl<I, O, F> State for IntegrationState<I, O, F>
 where
     I: ComplexField<RealField = F> + Copy,
-    O: IntegrationOutput<Scalar = I, Float = F>,
+    O: IntegrationOutput<Float = F>,
     F: IntegrableFloat,
 {
     type Float = F;
@@ -185,7 +187,7 @@ where
             counts: HashMap::new(),
             time: None,
             termination_status: Status::default(),
-
+            accumulate_values: false,
         }
     }
 
@@ -193,7 +195,7 @@ where
         self.iter += 1;
     }
 
-    fn current_iteration(&self) -> usize{
+    fn current_iteration(&self) -> usize {
         self.iter
     }
 

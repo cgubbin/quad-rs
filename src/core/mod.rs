@@ -6,8 +6,8 @@ use num_traits::{Float, FromPrimitive};
 mod poly;
 mod pre;
 mod quad;
-//
-// pub(super) use quad::GaussKronrodCore;
+
+pub(crate) use quad::GaussKronrodCore;
 
 // Error calculation choice for non-scalar IntegrationOutput
 #[derive(Debug)]
@@ -219,6 +219,9 @@ where
             points.push(range.end);
             weights.push(gk_weights[gk_weights.len() - 1]);
         }
-        IntegrationValues { evaluation_points: points, weights }
+        IntegrationValues {
+            evaluation_points: points,
+            weights,
+        }
     }
 }

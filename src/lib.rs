@@ -13,19 +13,11 @@ mod state;
 
 pub use bounds::{AccumulateError, Integrable, IntegrableFloat, IntegrationOutput, RescaleError};
 pub use error::{EvaluationError, IntegrationError};
+pub(crate) use state::IntegrationState;
 
 pub(crate) use contour::{split_range_once_around_singularity, Contour};
+pub(crate) use core::{GaussKronrod, GaussKronrodCore};
 pub(crate) use generate::{Generate, IntegrationValues};
 pub use result::IntegrationResult;
-pub use core::GaussKronrod;
+pub(crate) use result::Values;
 pub(crate) use segments::{Segment, SegmentData, SegmentHeap, Segments};
-
-#[derive(Debug)]
-pub struct Values<I, O>
-where
-    O: IntegrationOutput,
-{
-    pub(crate) points: Vec<I>,
-    pub(crate) weights: Vec<O::Float>,
-    pub(crate) values: Vec<O>,
-}
