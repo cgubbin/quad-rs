@@ -1,13 +1,13 @@
 use nalgebra::{ComplexField, RealField};
-use num_traits::{FromPrimitive};
+use num_traits::FromPrimitive;
 
 use std::ops::Range;
-use trellis::{Calculation, Problem, KV};
+use trellis::{Calculation, Problem};
 
 use crate::{
     contour::{split_range_around_singularities, Direction},
     AccumulateError, Contour, GaussKronrod, GaussKronrodCore, Integrable, IntegrableFloat,
-    IntegrationError, IntegrationOutput, IntegrationState, RescaleError,
+    IntegrationError, IntegrationOutput, IntegrationResult, IntegrationState, RescaleError,
 };
 
 #[derive(Debug)]
@@ -22,7 +22,29 @@ pub struct AdaptiveIntegrator<F: ComplexField> {
 }
 
 impl<F: ComplexField> AdaptiveIntegrator<F> {
-    pub(crate) fn new(
+    pub fn new_real(
+        Range { start, end }: Range<<F as ComplexField>::RealField>,
+        max_elements: usize,
+        minimum_element_size: <F as ComplexField>::RealField,
+        singularities: Vec<F>,
+        relative_tolerance: <F as ComplexField>::RealField,
+        absolute_tolerance: <F as ComplexField>::RealField,
+    ) -> Self {
+        Self {
+            limits: Range {
+                start: F::from_real(start),
+                end: F::from_real(end),
+            },
+            max_elements,
+            minimum_element_size,
+            singularities,
+            integrator: GaussKronrod::default(),
+            relative_tolerance,
+            absolute_tolerance,
+        }
+    }
+
+    pub fn new(
         limits: Range<F>,
         max_elements: usize,
         minimum_element_size: <F as ComplexField>::RealField,
@@ -66,12 +88,13 @@ where
 {
     const NAME: &'static str = "Adaptive Integrator";
     type Error = IntegrationError<I>;
+    type Output = IntegrationResult<I, O>;
 
     fn initialise(
         &mut self,
         problem: &mut Problem<P>,
         state: IntegrationState<I, O, F>,
-    ) -> Result<(IntegrationState<I, O, F>, Option<KV>), Self::Error> {
+    ) -> Result<IntegrationState<I, O, F>, Self::Error> {
         let initial_segments = match self.singularities.len() {
             0 => self
                 .integrator
@@ -87,33 +110,30 @@ where
                 })
                 .collect(),
         };
-        Ok((
-            state
-                .segments(initial_segments)
-                .with_relative_tolerance(self.relative_tolerance),
-            None,
-        ))
+        Ok(state
+            .segments(initial_segments)
+            .with_relative_tolerance(self.relative_tolerance))
     }
 
     fn next(
         &mut self,
         problem: &mut Problem<P>,
         mut state: IntegrationState<I, O, F>,
-    ) -> Result<(IntegrationState<I, O, F>, Option<KV>), Self::Error> {
+    ) -> Result<IntegrationState<I, O, F>, Self::Error> {
         let worst_segment = state.pop_worst_segment().unwrap();
         let new_segments = self
             .integrator
             .split_segment(|x| problem.integrand(&x).unwrap(), worst_segment)
             .unwrap();
-        Ok((state.segments(new_segments), None))
+        Ok(state.segments(new_segments))
     }
 
     fn finalise(
         &mut self,
         _problem: &mut Problem<P>,
         state: IntegrationState<I, O, F>,
-    ) -> Result<(IntegrationState<I, O, F>, Option<KV>), Self::Error> {
-        Ok((state, None))
+    ) -> Result<Self::Output, Self::Error> {
+        Ok(state.into())
     }
 }
 
@@ -133,7 +153,7 @@ where
     F: ComplexField + Copy,
     <F as ComplexField>::RealField: Copy,
 {
-    pub(crate) fn initialise<I: Into<Contour<F>>>(
+    pub fn initialise<I: Into<Contour<F>>>(
         input: I,
         direction: Direction,
         max_elements: usize,
@@ -152,7 +172,7 @@ where
         }
     }
 
-    pub(crate) fn new(
+    pub fn new(
         x_limits: &Range<F::RealField>,
         y_limits: &Range<F::RealField>,
         direction: Direction,
@@ -184,12 +204,13 @@ where
 {
     const NAME: &'static str = "Adaptive Contour Integrator";
     type Error = IntegrationError<I>;
+    type Output = IntegrationResult<I, O>;
 
     fn initialise(
         &mut self,
         problem: &mut Problem<P>,
         state: IntegrationState<I, O, F>,
-    ) -> Result<(IntegrationState<I, O, F>, Option<KV>), Self::Error> {
+    ) -> Result<IntegrationState<I, O, F>, Self::Error> {
         let initial_segments = self
             .contour
             .range
@@ -200,32 +221,29 @@ where
                     .unwrap()
             })
             .collect();
-        Ok((
-            state
-                .segments(initial_segments)
-                .with_relative_tolerance(self.relative_tolerance),
-            None,
-        ))
+        Ok(state
+            .segments(initial_segments)
+            .with_relative_tolerance(self.relative_tolerance))
     }
 
     fn next(
         &mut self,
         problem: &mut Problem<P>,
         mut state: IntegrationState<I, O, F>,
-    ) -> Result<(IntegrationState<I, O, F>, Option<KV>), Self::Error> {
+    ) -> Result<IntegrationState<I, O, F>, Self::Error> {
         let worst_segment = state.pop_worst_segment().unwrap();
         let new_segments = self
             .integrator
             .split_segment(|x| problem.integrand(&x).unwrap(), worst_segment)
             .unwrap();
-        Ok((state.segments(new_segments), None))
+        Ok(state.segments(new_segments))
     }
 
     fn finalise(
         &mut self,
         _problem: &mut Problem<P>,
         state: IntegrationState<I, O, F>,
-    ) -> Result<(IntegrationState<I, O, F>, Option<KV>), Self::Error> {
-        Ok((state, None))
+    ) -> Result<Self::Output, Self::Error> {
+        Ok(state.into())
     }
 }

@@ -8,6 +8,7 @@
 use nalgebra::RealField;
 use num_traits::FromPrimitive;
 
+#[derive(Debug)]
 pub struct IntegrationValues<F> {
     pub(crate) evaluation_points: Vec<F>,
     pub(crate) weights: Vec<F>,

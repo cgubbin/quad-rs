@@ -14,7 +14,7 @@ readme = "README.md"
 [dependencies]
 approx = "0.5.1"
 argmin-math = "0.3.0"
-nalgebra = "=0.30.0"
+nalgebra = "0.32.0"
 ndarray = { version = "0.15.6", optional = true }
 ndarray-stats = { version = "0.5.1", optional = true }
 num-complex = "0.4.0"

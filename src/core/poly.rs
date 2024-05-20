@@ -2,7 +2,7 @@ use super::GaussKronrod;
 use nalgebra::RealField;
 use num_traits::FromPrimitive;
 
-pub(super) struct Weights<F> {
+pub(crate) struct Weights<F> {
     pub(crate) gauss: Vec<F>,
     pub(crate) gauss_kronrod: Vec<F>,
 }
@@ -533,7 +533,7 @@ mod tests {
         let abscissae = GaussKronrod::compute_gauss_kronrod_abscissae(order, &coeffs, &zeros);
         let weights = GaussKronrod::compute_gauss_kronrod_weights(&abscissae, &coeffs);
 
-        for (value, calculated) in values.into_iter().zip(weights.1) {
+        for (value, calculated) in values.into_iter().zip(weights.gauss_kronrod) {
             assert_relative_eq!(value, calculated, epsilon = 10. * std::f64::EPSILON);
         }
     }
@@ -557,7 +557,7 @@ mod tests {
         let abscissae = GaussKronrod::compute_gauss_kronrod_abscissae(order, &coeffs, &zeros);
         let weights = GaussKronrod::compute_gauss_kronrod_weights(&abscissae, &coeffs);
 
-        for (value, calculated) in values.into_iter().zip(weights.0) {
+        for (value, calculated) in values.into_iter().zip(weights.gauss) {
             assert_relative_eq!(value, calculated, epsilon = 10. * std::f64::EPSILON);
         }
     }

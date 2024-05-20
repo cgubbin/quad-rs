@@ -212,7 +212,7 @@ where
         self.time = Some(time);
     }
 
-    fn update(&mut self) {
+    fn update(mut self) -> Self {
         if self.error < self.best_error
             || (FloatCore::is_infinite(self.error)
                 && FloatCore::is_infinite(self.best_error)
@@ -227,6 +227,15 @@ where
             self.best_error = self.error;
             self.last_best_iter = self.iter;
         }
+
+        if self.error < self.relative_tolerance {
+            return self.terminate_due_to(Reason::Converged);
+        }
+        if self.current_iteration() > self.max_iters {
+            return self.terminate_due_to(Reason::ExceededMaxIterations);
+        }
+
+        self
     }
 
     fn is_initialised(&self) -> bool {
