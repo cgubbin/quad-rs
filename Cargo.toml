@@ -23,7 +23,7 @@ ordered-float = "2.10.0"
 rayon = "1.8.1"
 serde = { version = "1.0.197", features = ["derive"] }
 thiserror = "1.0.30"
-trellis = { path = "../../../sensorium/tooling/runner", default-features = false }
+trellis = { git = "https://github.com/sensoriumtl/trellis.git" }
 
 [features]
 ndarray = ["dep:ndarray", "dep:ndarray-stats"]
