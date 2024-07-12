@@ -10,6 +10,7 @@ mod quad;
 use quad::GaussKronrodCore;
 
 /// A Gauss-Kronrod Integrator
+#[derive(Debug, Clone)]
 pub struct GaussKronrod<N> {
     /// The integration order for Gauss integration,
     /// the order used for Gauss-Kronrod is 2 m + 1
