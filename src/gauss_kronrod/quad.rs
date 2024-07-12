@@ -4,7 +4,7 @@ use nalgebra::ComplexField;
 use num_traits::{Float, FromPrimitive};
 use ordered_float::NotNan;
 use std::collections::BinaryHeap;
-use std::time::Instant;
+use web_time::Instant;
 
 /// A struct to track the progress of a solver, as we pass to sub-routines this allows
 /// us to track the value of the integral and the number of evaluations without passing

@@ -6,7 +6,7 @@ pub struct IntegrationResult<T>
 where
     T: ComplexField,
 {
-    running_time: std::time::Duration,
+    running_time: web_time::Duration,
     number_of_function_evaluations: usize,
     pub result: Option<T>,
     pub error: Option<T::RealField>,
@@ -40,7 +40,7 @@ where
         self
     }
 
-    pub fn with_duration(mut self, time_elapsed: std::time::Duration) -> Self {
+    pub fn with_duration(mut self, time_elapsed: web_time::Duration) -> Self {
         self.running_time = time_elapsed;
         self
     }
@@ -59,7 +59,7 @@ where
         IntegrationResult {
             result: None,
             error: None,
-            running_time: std::time::Duration::from_secs(0),
+            running_time: web_time::Duration::from_secs(0),
             number_of_function_evaluations: 0,
         }
     }
