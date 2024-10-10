@@ -6,7 +6,7 @@ use num_complex::Complex;
 use num_traits::float::{Float, FloatCore};
 use serde::{de::DeserializeOwned, Serialize};
 use std::fmt::{Debug, Display};
-use trellis::TrellisFloat;
+use trellis_runner::TrellisFloat;
 
 pub trait RealIntegrableScalar:
     IntegrableFloat

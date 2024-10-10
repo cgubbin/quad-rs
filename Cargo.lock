@@ -322,7 +322,7 @@ dependencies = [
  "rayon",
  "serde",
  "thiserror",
- "trellis",
+ "trellis-runner",
 ]
 
 [[package]]
@@ -495,9 +495,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "trellis"
+name = "trellis-runner"
 version = "0.1.0"
-source = "git+https://github.com/sensoriumtl/trellis.git?branch=simplify#2088b35d9efef8717f9437b737fe32d68e95fe02"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb49e8e57be7816dfed3772624ba547709999445e16dab3e07b865a06be7fc49"
 dependencies = [
  "num-traits",
  "serde",

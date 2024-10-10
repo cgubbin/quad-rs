@@ -2,7 +2,7 @@ use nalgebra::{ComplexField, RealField};
 use num_traits::FromPrimitive;
 
 use std::ops::Range;
-use trellis::{Calculation, Problem};
+use trellis_runner::{Calculation, Problem};
 
 use crate::{
     contour::split_range_around_singularities, AccumulateError, Contour, GaussKronrod,

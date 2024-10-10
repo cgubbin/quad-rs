@@ -29,4 +29,4 @@ pub(crate) use generate::{Generate, IntegrationValues};
 pub use result::IntegrationResult;
 pub(crate) use result::Values;
 pub(crate) use segments::{Segment, SegmentData, SegmentHeap, Segments};
-pub use trellis::GenerateBuilder;
+pub use trellis_runner::GenerateBuilder;

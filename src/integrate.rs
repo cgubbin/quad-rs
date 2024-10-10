@@ -6,7 +6,7 @@ use crate::{
 use nalgebra::{ComplexField, RealField};
 use num_traits::FromPrimitive;
 use std::ops::Range;
-use trellis::{GenerateBuilder, Output, TrellisError};
+use trellis_runner::{GenerateBuilder, Output, TrellisError};
 
 pub struct Integrator<F> {
     max_iter: usize,

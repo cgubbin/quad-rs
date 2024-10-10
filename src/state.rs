@@ -1,7 +1,7 @@
 use nalgebra::ComplexField;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use trellis::{ErrorEstimate, UserState};
+use trellis_runner::{ErrorEstimate, UserState};
 
 use crate::{IntegrableFloat, IntegrationOutput, Segment, SegmentHeap, Segments, Values};
 
