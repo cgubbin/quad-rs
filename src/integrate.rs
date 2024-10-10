@@ -1,7 +1,7 @@
 use crate::{
-    AccumulateError, AdaptiveIntegrator, AdaptiveRectangularContourIntegrator, Contour,
-    Integrable, IntegrableFloat, IntegrationError, IntegrationOutput, IntegrationResult,
-    IntegrationState, RescaleError,
+    AccumulateError, AdaptiveIntegrator, AdaptiveRectangularContourIntegrator, Contour, Integrable,
+    IntegrableFloat, IntegrationError, IntegrationOutput, IntegrationResult, IntegrationState,
+    RescaleError,
 };
 use nalgebra::{ComplexField, RealField};
 use num_traits::FromPrimitive;
@@ -78,8 +78,6 @@ impl<F: FromPrimitive> Integrator<F> {
             .finalise()
             .unwrap();
 
-        
-
         runner.run()
     }
 
@@ -114,8 +112,6 @@ impl<F: FromPrimitive> Integrator<F> {
             })
             .finalise()
             .unwrap();
-
-        
 
         runner.run()
     }
