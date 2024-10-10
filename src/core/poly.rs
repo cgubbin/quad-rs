@@ -29,7 +29,7 @@ where
                 let mut epsilon = GaussKronrod::legendre_polynomial_error(k, x_j);
                 // Do Newtons method to find the zero
                 while p_k.modulus() > epsilon
-                    && delta.modulus() > F::from_f64(std::f64::EPSILON).unwrap()
+                    && delta.modulus() > F::from_f64(f64::EPSILON).unwrap()
                 {
                     delta = p_k / GaussKronrod::legendre_derivative(k, x_j);
                     x_j -= F::from_f64(0.5).unwrap() * delta;
@@ -101,8 +101,7 @@ where
             let mut x_k = F::from_f64(1e-10).unwrap()
                 + (zerosb[m - k] + zerosb[m + 1 - k]) / F::from_usize(2).unwrap();
             let mut e = GaussKronrod::chebyshev_series(x_k, &mut epsilon, coeffs);
-            while e.modulus() > epsilon && delta.modulus() > F::from_f64(std::f64::EPSILON).unwrap()
-            {
+            while e.modulus() > epsilon && delta.modulus() > F::from_f64(f64::EPSILON).unwrap() {
                 delta = e / GaussKronrod::chebyshev_series_derivative(x_k, coeffs);
                 x_k -= delta;
                 e = GaussKronrod::chebyshev_series(x_k, &mut epsilon, coeffs)
@@ -239,7 +238,7 @@ where
             d2 = tmp;
             absc += coeff.modulus();
         }
-        *error = absc * F::from_f64(std::f64::EPSILON).unwrap();
+        *error = absc * F::from_f64(f64::EPSILON).unwrap();
         d1 - x * d2
     }
 
@@ -315,7 +314,7 @@ mod tests {
             assert_relative_eq!(
                 calculated_result,
                 analytical_result,
-                epsilon = 1000. * std::f64::EPSILON
+                epsilon = 1000. * f64::EPSILON
             );
         }
     }
@@ -364,7 +363,7 @@ mod tests {
             assert_relative_eq!(
                 calculated_result,
                 analytical_result,
-                epsilon = 10000. * std::f64::EPSILON
+                epsilon = 10000. * f64::EPSILON
             );
         }
     }
@@ -451,7 +450,7 @@ mod tests {
             assert_relative_eq!(
                 chebyshev_calculated,
                 chebyshev_analytical,
-                epsilon = 1000. * std::f64::EPSILON
+                epsilon = 1000. * f64::EPSILON
             );
         }
     }
@@ -474,7 +473,7 @@ mod tests {
             assert_relative_eq!(
                 chebyshev_calculated,
                 chebyshev_analytical,
-                epsilon = 1000. * std::f64::EPSILON
+                epsilon = 1000. * f64::EPSILON
             );
         }
     }
@@ -534,7 +533,7 @@ mod tests {
         let weights = GaussKronrod::compute_gauss_kronrod_weights(&abscissae, &coeffs);
 
         for (value, calculated) in values.into_iter().zip(weights.gauss_kronrod) {
-            assert_relative_eq!(value, calculated, epsilon = 10. * std::f64::EPSILON);
+            assert_relative_eq!(value, calculated, epsilon = 10. * f64::EPSILON);
         }
     }
 
@@ -558,7 +557,7 @@ mod tests {
         let weights = GaussKronrod::compute_gauss_kronrod_weights(&abscissae, &coeffs);
 
         for (value, calculated) in values.into_iter().zip(weights.gauss) {
-            assert_relative_eq!(value, calculated, epsilon = 10. * std::f64::EPSILON);
+            assert_relative_eq!(value, calculated, epsilon = 10. * f64::EPSILON);
         }
     }
 }

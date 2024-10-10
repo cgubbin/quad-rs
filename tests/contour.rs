@@ -1,4 +1,3 @@
-use approx::assert_relative_eq;
 use num_complex::Complex;
 use quad_rs::{Contour, Direction, Integrable, Integrator};
 

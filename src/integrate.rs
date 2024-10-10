@@ -1,5 +1,5 @@
 use crate::{
-    AccumulateError, AdaptiveIntegrator, AdaptiveRectangularContourIntegrator, Contour, Direction,
+    AccumulateError, AdaptiveIntegrator, AdaptiveRectangularContourIntegrator, Contour,
     Integrable, IntegrableFloat, IntegrationError, IntegrationOutput, IntegrationResult,
     IntegrationState, RescaleError,
 };
@@ -78,9 +78,9 @@ impl<F: FromPrimitive> Integrator<F> {
             .finalise()
             .unwrap();
 
-        let solution = runner.run();
+        
 
-        solution
+        runner.run()
     }
 
     pub fn contour_integrate<P>(
@@ -115,9 +115,9 @@ impl<F: FromPrimitive> Integrator<F> {
             .finalise()
             .unwrap();
 
-        let solution = runner.run();
+        
 
-        solution
+        runner.run()
     }
 }
 

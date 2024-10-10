@@ -1,7 +1,6 @@
 use num_complex::Complex;
 // Tests for the integration module
 use quad_rs::{Integrable, Integrator};
-use trellis::GenerateBuilder;
 
 /// Integrate `e^x` along the real line from -1 -> 1. The analytical
 /// value of the integral has been calculated utilising mathematica

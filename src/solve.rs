@@ -5,9 +5,9 @@ use std::ops::Range;
 use trellis::{Calculation, Problem};
 
 use crate::{
-    contour::{split_range_around_singularities, Direction},
-    AccumulateError, Contour, GaussKronrod, GaussKronrodCore, Integrable, IntegrableFloat,
-    IntegrationError, IntegrationOutput, IntegrationResult, IntegrationState, RescaleError,
+    contour::split_range_around_singularities, AccumulateError, Contour, GaussKronrod,
+    GaussKronrodCore, Integrable, IntegrableFloat, IntegrationError, IntegrationOutput,
+    IntegrationResult, IntegrationState, RescaleError,
 };
 
 #[derive(Debug)]
@@ -169,7 +169,6 @@ where
     }
     pub fn initialise<I: Into<Contour<F>>>(
         input: I,
-        direction: Direction,
         max_elements: usize,
         minimum_element_size: <F as ComplexField>::RealField,
         relative_tolerance: <F as ComplexField>::RealField,

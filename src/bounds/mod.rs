@@ -145,8 +145,8 @@ impl RescaleError for f32 {
             }
         }
 
-        if result_abs > std::f32::EPSILON / (50. * std::f32::EPSILON) {
-            let min_err = 50. * std::f32::EPSILON * result_abs;
+        if result_abs > f32::EPSILON / (50. * f32::EPSILON) {
+            let min_err = 50. * f32::EPSILON * result_abs;
             if min_err > error {
                 error = min_err;
             }
@@ -169,8 +169,8 @@ impl RescaleError for f64 {
             }
         }
 
-        if result_abs > std::f64::EPSILON / (50. * std::f64::EPSILON) {
-            let min_err = 50. * std::f64::EPSILON * result_abs;
+        if result_abs > f64::EPSILON / (50. * f64::EPSILON) {
+            let min_err = 50. * f64::EPSILON * result_abs;
             if min_err > error {
                 error = min_err;
             }
