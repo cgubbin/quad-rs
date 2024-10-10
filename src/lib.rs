@@ -1,43 +1,32 @@
-//! quad-rs implements adaptive Gauss-Kronrod integration in rust.
-//!
-//! # Examples
-//! ```no_run
-//! use quad_rs::prelude::*;
-//!
-//! fn integrand(x: f64) -> f64 {
-//!     x.exp()
-//! }
-//!
-//! fn main() {
-//!     let integrator = GaussKronrod::default()
-//!         .with_maximum_function_evaluations(200);
-//!     let range = -1f64..1f64;
-//!     let result = integrator
-//!       .integrate(&integrand, range, None)
-//!       .unwrap();
-//! }
-//! ```
-
-#[warn(clippy::all)]
-#[warn(missing_docs)]
-/// Contours for integration in the complex plane
+#![allow(dead_code)]
+#![allow(clippy::type_complexity)]
+// #[warn(clippy::all)]
+// #[warn(missing_docs)]
+mod bounds;
 mod contour;
-/// Error handling
+mod core;
 mod error;
-/// Gauss-Kronrod core
-mod gauss_kronrod;
-/// Integration traits
+mod generate;
 mod integrate;
-/// Re-export of the driving traits and integrator
-pub mod prelude;
-/// The result structure
 mod result;
-/// Each integral is carried out on a `segment`
 mod segments;
+mod solve;
+mod state;
 
-pub use contour::{split_range_around_singularities, Contour, Direction};
-pub use error::IntegrationError;
-pub use gauss_kronrod::GaussKronrod;
-pub use integrate::{Integrate, IntegrationSettings};
+pub use bounds::{
+    AccumulateError, Integrable, IntegrableFloat, IntegrationOutput, RealIntegrableScalar,
+    RescaleError,
+};
+pub use error::{EvaluationError, IntegrationError};
+pub use integrate::Integrator;
+pub use solve::{AdaptiveIntegrator, AdaptiveRectangularContourIntegrator};
+pub(crate) use state::IntegrationState;
+
+pub(crate) use contour::split_range_once_around_singularity;
+pub use contour::{Contour, Direction};
+pub(crate) use core::{GaussKronrod, GaussKronrodCore};
+pub(crate) use generate::{Generate, IntegrationValues};
 pub use result::IntegrationResult;
-pub use segments::{Segment, Segments};
+pub(crate) use result::Values;
+pub(crate) use segments::{Segment, SegmentData, SegmentHeap, Segments};
+pub use trellis_runner::GenerateBuilder;

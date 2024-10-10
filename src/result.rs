@@ -1,47 +1,61 @@
-use crate::IntegrationError;
+use crate::{state::IntegrationState, IntegrableFloat, IntegrationError, IntegrationOutput};
 use nalgebra::ComplexField;
 
-#[derive(Debug)]
-pub struct IntegrationResult<T>
+impl<I, O, F> From<IntegrationState<I, O, F>> for IntegrationResult<I, O>
 where
-    T: ComplexField,
+    O: IntegrationOutput<Float = F> + Clone,
+    I: ComplexField<RealField = F> + Copy,
+    F: IntegrableFloat,
 {
-    running_time: std::time::Duration,
-    number_of_function_evaluations: usize,
-    pub result: Option<T>,
-    pub error: Option<T::RealField>,
+    fn from(val: IntegrationState<I, O, F>) -> Self {
+        IntegrationResult {
+            number_of_function_evaluations: 0,
+            result: val.integral.clone(),
+            values: if val.accumulate_values {
+                val.into_resolved()
+            } else {
+                None
+            },
+        }
+    }
 }
 
-impl<T> IntegrationResult<T>
+#[derive(Debug)]
+pub struct Values<I, O>
 where
-    T: ComplexField,
+    O: IntegrationOutput,
 {
-    pub fn result(&self) -> Result<&T, IntegrationError<T>> {
+    /// The nodes at which the integral was evaluated
+    pub points: Vec<I>,
+    /// The weights used to evaluate the integral
+    pub weights: Vec<O::Float>,
+    /// The value of the integrand at `points`
+    pub values: Vec<O>,
+}
+
+#[derive(Debug)]
+pub struct IntegrationResult<I, O>
+where
+    O: IntegrationOutput,
+{
+    number_of_function_evaluations: usize,
+    pub result: Option<O>,
+    pub values: Option<Values<I, O>>,
+}
+
+impl<I, O> IntegrationResult<I, O>
+where
+    O: IntegrationOutput,
+{
+    pub fn result(&self) -> Result<&O, IntegrationError<O>> {
         match self.result {
             Some(ref x) => Ok(x),
             None => Err(IntegrationError::NoSolution),
         }
     }
 
-    pub fn error(&self) -> Result<&T::RealField, IntegrationError<T>> {
-        match self.error {
-            Some(ref x) => Ok(x),
-            None => Err(IntegrationError::NoSolution),
-        }
-    }
-
-    pub fn with_error(mut self, error: T::RealField) -> Self {
-        self.error = Some(error);
-        self
-    }
-
-    pub fn with_result(mut self, result: T) -> Self {
+    pub fn with_result(mut self, result: O) -> Self {
         self.result = Some(result);
-        self
-    }
-
-    pub fn with_duration(mut self, time_elapsed: std::time::Duration) -> Self {
-        self.running_time = time_elapsed;
         self
     }
 
@@ -51,34 +65,31 @@ where
     }
 }
 
-impl<T> Default for IntegrationResult<T>
+impl<I, O> Default for IntegrationResult<I, O>
 where
-    T: ComplexField,
+    O: IntegrationOutput,
 {
-    fn default() -> IntegrationResult<T> {
+    fn default() -> IntegrationResult<I, O> {
         IntegrationResult {
             result: None,
-            error: None,
-            running_time: std::time::Duration::from_secs(0),
+            values: None,
             number_of_function_evaluations: 0,
         }
     }
 }
 
-impl<T> std::fmt::Display for IntegrationResult<T>
+impl<I, O> std::fmt::Display for IntegrationResult<I, O>
 where
-    T: ComplexField + std::fmt::Display,
+    O: IntegrationOutput + std::fmt::Display,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.result.is_none() | self.error.is_none() {
+        if self.result.is_none() {
             write!(f, "The integrator has no solution")
         } else {
             write!(
                 f,
-                "Result: {}, Error: {}, Elapsed: {:?}, N-evals: {}",
+                "Result: {}, N-evals: {}",
                 self.result.as_ref().unwrap(),
-                self.error.as_ref().unwrap(),
-                self.running_time,
                 self.number_of_function_evaluations,
             )
         }
