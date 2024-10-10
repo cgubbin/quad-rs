@@ -22,10 +22,7 @@ pub enum Direction {
 
 impl<I> Contour<I>
 where
-    I: ComplexField
-        + FromPrimitive
-        // + std::convert::From<nalgebra::Complex<<I as nalgebra::ComplexField>::RealField>>
-        + Copy,
+    I: ComplexField + FromPrimitive + Copy,
     <I as ComplexField>::RealField: Copy,
 {
     /// Generate a closed rectangular contour
@@ -49,7 +46,8 @@ where
         x_range: &std::ops::Range<I::RealField>,
         y_range: &std::ops::Range<I::RealField>,
     ) -> Vec<std::ops::Range<I>> {
-        let i = -(-I::one()).sqrt();
+        // let i: I = nalgebra::Complex::new(I::zero().real(), I::one().real()).into();
+        let i = -<I as ComplexField>::try_sqrt(-I::one()).unwrap();
         let path = [
             I::from_real(x_range.start) + i * I::from_real(y_range.start),
             I::from_real(x_range.end) + i * I::from_real(y_range.start),
@@ -187,7 +185,7 @@ mod test {
             end: 0.5,
         };
 
-        let contour: Contour<Complex<f64>> =
+        let _contour: Contour<Complex<f64>> =
             Contour::generate_rectangular(&x_range, &y_range, Direction::Clockwise);
     }
 }

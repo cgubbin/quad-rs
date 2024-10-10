@@ -110,9 +110,8 @@ where
                 })
                 .collect(),
         };
-        Ok(state
-            .segments(initial_segments)
-            .with_relative_tolerance(self.relative_tolerance))
+
+        Ok(state.segments(initial_segments))
     }
 
     fn next(
@@ -145,7 +144,6 @@ pub struct AdaptiveRectangularContourIntegrator<F: ComplexField> {
     pub(crate) integrator: GaussKronrod<<F as ComplexField>::RealField>,
     pub(crate) relative_tolerance: <F as ComplexField>::RealField,
     pub(crate) absolute_tolerance: <F as ComplexField>::RealField,
-    pub(crate) direction: Direction,
 }
 
 impl<F> AdaptiveRectangularContourIntegrator<F>
@@ -153,6 +151,22 @@ where
     F: ComplexField + Copy,
     <F as ComplexField>::RealField: Copy,
 {
+    pub fn new(
+        contour: Contour<F>,
+        max_elements: usize,
+        minimum_element_size: <F as ComplexField>::RealField,
+        relative_tolerance: <F as ComplexField>::RealField,
+        absolute_tolerance: <F as ComplexField>::RealField,
+    ) -> Self {
+        Self {
+            contour,
+            max_elements,
+            minimum_element_size,
+            integrator: GaussKronrod::default(),
+            relative_tolerance,
+            absolute_tolerance,
+        }
+    }
     pub fn initialise<I: Into<Contour<F>>>(
         input: I,
         direction: Direction,
@@ -168,28 +182,6 @@ where
             integrator: GaussKronrod::default(),
             relative_tolerance,
             absolute_tolerance,
-            direction,
-        }
-    }
-
-    pub fn new(
-        x_limits: &Range<F::RealField>,
-        y_limits: &Range<F::RealField>,
-        direction: Direction,
-        max_elements: usize,
-        minimum_element_size: <F as ComplexField>::RealField,
-        relative_tolerance: <F as ComplexField>::RealField,
-        absolute_tolerance: <F as ComplexField>::RealField,
-    ) -> Self {
-        let contour = Contour::generate_rectangular(x_limits, y_limits, Direction::Clockwise);
-        Self {
-            contour,
-            max_elements,
-            minimum_element_size,
-            integrator: GaussKronrod::default(),
-            relative_tolerance,
-            absolute_tolerance,
-            direction,
         }
     }
 }
@@ -221,9 +213,7 @@ where
                     .unwrap()
             })
             .collect();
-        Ok(state
-            .segments(initial_segments)
-            .with_relative_tolerance(self.relative_tolerance))
+        Ok(state.segments(initial_segments))
     }
 
     fn next(

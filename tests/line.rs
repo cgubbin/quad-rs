@@ -1,6 +1,6 @@
 use num_complex::Complex;
 // Tests for the integration module
-use quad_rs::{AdaptiveIntegrator, Integrable};
+use quad_rs::{Integrable, Integrator};
 use trellis::GenerateBuilder;
 
 /// Integrate `e^x` along the real line from -1 -> 1. The analytical
@@ -24,19 +24,15 @@ fn integrate_simple_exponential_along_real_line() {
         }
     }
 
-    let solver = AdaptiveIntegrator::new(range, 1000, 0.001, vec![], 1e-8, 1e-8);
+    let integrator = Integrator::default()
+        .with_maximum_iter(1000)
+        .relative_tolerance(1e-8);
 
-    let runner = solver
-        .build_for(Problem {})
-        .configure(|state| state.max_iters(100))
-        .finalise()
-        .unwrap();
-
-    let solution = runner.run().unwrap();
+    let solution = integrator.integrate(Problem {}, range).unwrap();
 
     let analytical_result = std::f64::consts::E - 1. / std::f64::consts::E;
     approx::assert_relative_eq!(
-        *solution.result().unwrap(),
+        solution.result.result.unwrap(),
         analytical_result,
         max_relative = 1e-10
     );
@@ -62,20 +58,16 @@ fn integrate_simple_exponential_along_real_line_with_scaled_domain() {
         }
     }
 
-    let solver = AdaptiveIntegrator::new(range, 1000, 0.001, vec![], 1e-8, 1e-8);
+    let integrator = Integrator::default()
+        .with_maximum_iter(1000)
+        .relative_tolerance(1e-8);
 
-    let runner = solver
-        .build_for(Problem {})
-        .configure(|state| state.max_iters(100))
-        .finalise()
-        .unwrap();
-
-    let solution = runner.run().unwrap();
+    let solution = integrator.integrate(Problem {}, range).unwrap();
 
     let analytical_result = 2. * 10f64.sinh();
 
     approx::assert_relative_eq!(
-        *solution.result().unwrap(),
+        solution.result.result.unwrap(),
         analytical_result,
         max_relative = 1e-10
     );
@@ -100,20 +92,16 @@ fn integrate_simple_exponential_along_real_line_with_translated_domain() {
         }
     }
 
-    let solver = AdaptiveIntegrator::new(range, 1000, 0.001, vec![], 1e-8, 1e-8);
+    let integrator = Integrator::default()
+        .with_maximum_iter(1000)
+        .relative_tolerance(1e-8);
 
-    let runner = solver
-        .build_for(Problem {})
-        .configure(|state| state.max_iters(100))
-        .finalise()
-        .unwrap();
-
-    let solution = runner.run().unwrap();
+    let solution = integrator.integrate(Problem {}, range).unwrap();
 
     let analytical_result = 8f64.exp() * (2f64.exp() - 1f64);
 
     approx::assert_relative_eq!(
-        *solution.result().unwrap(),
+        solution.result.result.unwrap(),
         analytical_result,
         max_relative = 1e-10
     );
@@ -140,24 +128,20 @@ fn integrate_simple_exponential_with_complex_exponent() {
 
     let analytical_result = (Complex::new(0., 1.) - 2.).exp() * (4f64.exp() - 1f64);
 
-    let solver = AdaptiveIntegrator::new(range, 1000, 0.001, vec![], 1e-8, 1e-8);
+    let integrator = Integrator::default()
+        .with_maximum_iter(1000)
+        .relative_tolerance(1e-8);
 
-    let runner = solver
-        .build_for(Problem {})
-        .configure(|state| state.max_iters(100))
-        .finalise()
-        .unwrap();
-
-    let solution = runner.run().unwrap();
+    let solution = integrator.integrate(Problem {}, range).unwrap();
 
     approx::assert_relative_eq!(
-        solution.result().unwrap().re,
+        solution.result.result.unwrap().re,
         analytical_result.re,
         max_relative = 1e-10
     );
 
     approx::assert_relative_eq!(
-        solution.result().unwrap().im,
+        solution.result.result().unwrap().im,
         analytical_result.im,
         max_relative = 1e-10
     );

@@ -6,13 +6,18 @@ mod contour;
 mod core;
 mod error;
 mod generate;
+mod integrate;
 mod result;
 mod segments;
 mod solve;
 mod state;
 
-pub use bounds::{AccumulateError, Integrable, IntegrableFloat, IntegrationOutput, RescaleError};
+pub use bounds::{
+    AccumulateError, Integrable, IntegrableFloat, IntegrationOutput, RealIntegrableScalar,
+    RescaleError,
+};
 pub use error::{EvaluationError, IntegrationError};
+pub use integrate::Integrator;
 pub use solve::{AdaptiveIntegrator, AdaptiveRectangularContourIntegrator};
 pub(crate) use state::IntegrationState;
 

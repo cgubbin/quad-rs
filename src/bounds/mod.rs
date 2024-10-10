@@ -8,6 +8,18 @@ use serde::{de::DeserializeOwned, Serialize};
 use std::fmt::{Debug, Display};
 use trellis::TrellisFloat;
 
+pub trait RealIntegrableScalar:
+    IntegrableFloat
+    + crate::RescaleError
+    + crate::AccumulateError<Self>
+    + crate::IntegrationOutput<Scalar = Self, Float = Self>
+    + nalgebra::RealField
+{
+}
+
+impl RealIntegrableScalar for f64 {}
+impl RealIntegrableScalar for f32 {}
+
 pub trait IntegrableFloat:
     Clone
     + Debug
@@ -94,7 +106,7 @@ impl AccumulateError<Self> for f32 {
     }
 }
 
-#[cfg(ndarray)]
+#[cfg(feature = "ndarray")]
 impl<T: num_traits::float::FloatCore + num_traits::FromPrimitive + PartialOrd + Send + Sync>
     AccumulateError<T> for ndarray::Array1<T>
 {
@@ -106,7 +118,7 @@ impl<T: num_traits::float::FloatCore + num_traits::FromPrimitive + PartialOrd + 
     }
 }
 
-#[cfg(ndarray)]
+#[cfg(feature = "ndarray")]
 impl<T: num_traits::float::FloatCore + num_traits::FromPrimitive + PartialOrd + Send + Sync>
     AccumulateError<T> for ndarray::Array2<T>
 {
@@ -167,7 +179,7 @@ impl RescaleError for f64 {
     }
 }
 
-#[cfg(ndarray)]
+#[cfg(feature = "ndarray")]
 impl<T> RescaleError for ndarray::Array1<T>
 where
     T: RescaleError,
@@ -181,7 +193,7 @@ where
     }
 }
 
-#[cfg(ndarray)]
+#[cfg(feature = "ndarray")]
 impl<T> RescaleError for ndarrayArray2<T>
 where
     T: RescaleError,
@@ -254,7 +266,7 @@ impl IntegrationOutput for f64 {
     }
 }
 
-#[cfg(ndarray)]
+#[cfg(feature = "ndarray")]
 impl<T: ComplexField + Default> IntegrationOutput for ndarray::Array1<T>
 where
     Self: argmin_math::ArgminAdd<Self, Self>
@@ -287,7 +299,7 @@ where
     }
 }
 
-#[cfg(ndarray)]
+#[cfg(feature = "ndarray")]
 impl<T: ComplexField + Default> IntegrationOutput for ndarray::Array2<T>
 where
     Self: argmin_math::ArgminAdd<Self, Self>

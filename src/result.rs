@@ -9,10 +9,8 @@ where
 {
     fn from(val: IntegrationState<I, O, F>) -> Self {
         IntegrationResult {
-            running_time: val.time,
             number_of_function_evaluations: 0,
             result: val.integral.clone(),
-            error: Some(val.error),
             values: if val.accumulate_values {
                 val.into_resolved()
             } else {
@@ -40,10 +38,8 @@ pub struct IntegrationResult<I, O>
 where
     O: IntegrationOutput,
 {
-    running_time: Option<trellis::Duration>,
     number_of_function_evaluations: usize,
     pub result: Option<O>,
-    pub error: Option<O::Float>,
     pub values: Option<Values<I, O>>,
 }
 
@@ -58,25 +54,8 @@ where
         }
     }
 
-    pub fn error(&self) -> Result<&O::Float, IntegrationError<O>> {
-        match self.error {
-            Some(ref x) => Ok(x),
-            None => Err(IntegrationError::NoSolution),
-        }
-    }
-
-    pub fn with_error(mut self, error: O::Float) -> Self {
-        self.error = Some(error);
-        self
-    }
-
     pub fn with_result(mut self, result: O) -> Self {
         self.result = Some(result);
-        self
-    }
-
-    pub fn with_duration(mut self, time_elapsed: trellis::Duration) -> Self {
-        self.running_time = Some(time_elapsed);
         self
     }
 
@@ -93,9 +72,7 @@ where
     fn default() -> IntegrationResult<I, O> {
         IntegrationResult {
             result: None,
-            error: None,
             values: None,
-            running_time: None,
             number_of_function_evaluations: 0,
         }
     }
@@ -106,15 +83,13 @@ where
     O: IntegrationOutput + std::fmt::Display,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.result.is_none() | self.error.is_none() {
+        if self.result.is_none() {
             write!(f, "The integrator has no solution")
         } else {
             write!(
                 f,
-                "Result: {}, Error: {}, Elapsed: {:?}, N-evals: {}",
+                "Result: {}, N-evals: {}",
                 self.result.as_ref().unwrap(),
-                self.error.as_ref().unwrap(),
-                self.running_time,
                 self.number_of_function_evaluations,
             )
         }
