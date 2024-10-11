@@ -80,6 +80,48 @@ let range = Range {
 let solution = integrator.integrate(Problem {}, range).unwrap();
 ```
 
+## Example - Real to Complex Integration
+
+```rust
+use quad_rs::{Integrable, Integrator};
+use num_complex::Complex;
+use std::ops::Range;
+
+struct Problem {}
+
+impl Integrable for Problem {
+    type Input = f64;
+    type Output = Complex<f64>;
+    fn integrand(
+        &self,
+        input: &Self::Input,
+    ) -> Result<Self::Output, quad_rs::EvaluationError<Self::Input>> {
+        Ok(input.exp())
+    }
+}
+
+let integrator = Integrator::default()
+    .with_maximum_iter(1000)
+    .relative_tolerance(1e-8);
+
+
+let range = Range {
+    start: (-1f64),
+    end: 1f64,
+};
+
+let solution = integrator
+    .integrate_real_complex(Problem {}, range)
+    .unwrap();
+
+let result = solution.result.result.unwrap();
+
+let analytical_result = std::f64::consts::E - 1. / std::f64::consts::E;
+
+dbg!(&result, &analytical_result);
+
+```
+
 ## Example - Contour Integration
 
 

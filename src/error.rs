@@ -16,3 +16,15 @@ pub enum EvaluationError<I> {
     #[error("Possible singularity near {singularity:?}")]
     PossibleSingularity { singularity: I },
 }
+
+impl<R: num_traits::Zero> EvaluationError<R> {
+    pub(crate) fn into_complex(self) -> EvaluationError<num_complex::Complex<R>> {
+        match self {
+            EvaluationError::PossibleSingularity { singularity } => {
+                EvaluationError::PossibleSingularity {
+                    singularity: num_complex::Complex::new(singularity, R::zero()),
+                }
+            }
+        }
+    }
+}
