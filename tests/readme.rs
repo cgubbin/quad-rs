@@ -95,3 +95,43 @@ fn readme_test_contour() {
     let solution = integrator.contour_integrate(Problem {}, contour).unwrap();
     dbg!(solution.result.result);
 }
+
+#[test]
+fn readme_test_real_to_complex() {
+    use num_complex::Complex;
+    use quad_rs::{Integrable, Integrator};
+
+    struct Problem {}
+
+    impl Integrable for Problem {
+        type Input = f64;
+        type Output = Complex<f64>;
+        fn integrand(
+            &self,
+            input: &Self::Input,
+        ) -> Result<Self::Output, quad_rs::EvaluationError<Self::Input>> {
+            Ok(Complex::new(*input, 0.0).exp())
+        }
+    }
+
+    let integrator = Integrator::default()
+        .with_maximum_iter(1000)
+        .relative_tolerance(1e-8);
+
+    let range = std::ops::Range {
+        start: (-1f64),
+        end: 1f64,
+    };
+
+    let solution = integrator
+        .integrate_real_complex(Problem {}, range)
+        .unwrap();
+
+    let result = solution.result.result.unwrap();
+
+    let analytical_result = std::f64::consts::E - 1. / std::f64::consts::E;
+
+    dbg!(&result, &analytical_result);
+
+    approx::assert_relative_eq!(result.re, analytical_result, max_relative = 1e-10);
+}

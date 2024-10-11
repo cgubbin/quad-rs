@@ -14,6 +14,33 @@ pub struct Integrator<F> {
     minimum_segment_width: F,
 }
 
+struct Wrapped<P: Integrable, F>
+// where
+//     <P as Integrable>::Input: ComplexField<RealField = P::Input> + Copy + FromPrimitive,
+{
+    integrable: P,
+    float: std::marker::PhantomData<F>,
+}
+
+impl<P: Integrable<Input = F>, F> Integrable for Wrapped<P, F>
+where
+    <P as Integrable>::Output: ComplexField<RealField = F> + Copy,
+    <P as Integrable>::Input: num_traits::Zero,
+{
+    type Input = num_complex::Complex<P::Input>;
+    type Output = P::Output;
+    fn integrand(
+        &self,
+        input: &num_complex::Complex<P::Input>,
+    ) -> Result<Self::Output, crate::EvaluationError<Self::Input>> {
+        let output: P::Output = self
+            .integrable
+            .integrand(&input.re)
+            .map_err(|e| e.into_complex())?;
+        Ok(output)
+    }
+}
+
 impl<F: FromPrimitive> Default for Integrator<F> {
     fn default() -> Self {
         Self {
@@ -79,6 +106,40 @@ impl<F: FromPrimitive> Integrator<F> {
             .unwrap();
 
         runner.run()
+    }
+
+    pub fn integrate_real_complex<P>(
+        &self,
+        integrable: P,
+        range: Range<P::Input>,
+    ) -> Result<
+        Output<
+            IntegrationResult<num_complex::Complex<P::Input>, P::Output>,
+            IntegrationState<num_complex::Complex<P::Input>, P::Output, F>,
+        >,
+        TrellisError<
+            IntegrationResult<num_complex::Complex<P::Input>, P::Output>,
+            IntegrationError<num_complex::Complex<P::Input>>,
+        >,
+    >
+    where
+        F: IntegrableFloat + RealField + FromPrimitive + RescaleError + AccumulateError<F> + Copy,
+        P: Integrable<Input = F> + Send + Sync,
+        <P as Integrable>::Output: IntegrationOutput<Float = F, Scalar = num_complex::Complex<F>>
+            + ComplexField<RealField = F>
+            + Copy
+            + FromPrimitive,
+    {
+        let wrapped: Wrapped<P, F> = Wrapped {
+            integrable,
+            float: std::marker::PhantomData,
+        };
+
+        let range: Range<num_complex::Complex<P::Input>> =
+            num_complex::Complex::new(range.start, F::zero())
+                ..num_complex::Complex::new(range.end, F::zero());
+
+        self.integrate::<Wrapped<P, F>>(wrapped, range)
     }
 
     pub fn contour_integrate<P>(
