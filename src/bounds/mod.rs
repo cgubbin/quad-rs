@@ -123,7 +123,7 @@ impl<T: num_traits::float::FloatCore + num_traits::FromPrimitive + PartialOrd + 
     AccumulateError<T> for ndarray::Array2<T>
 {
     fn max(&self) -> T {
-        *ndarray::QuantileExt::max(self).unwrap()
+        *ndarray_stats::QuantileExt::max(self).unwrap()
     }
     fn mean(&self) -> T {
         self.mean().unwrap()
@@ -194,7 +194,7 @@ where
 }
 
 #[cfg(feature = "ndarray")]
-impl<T> RescaleError for ndarrayArray2<T>
+impl<T> RescaleError for ndarray::Array2<T>
 where
     T: RescaleError,
 {
@@ -203,7 +203,7 @@ where
             .zip(result_abs)
             .zip(result_asc)
             .map(|((err, abs), asc)| err.rescale(abs, asc))
-            .collect::<Array1<T>>()
+            .collect::<ndarray::Array1<T>>()
             .into_shape(self.dim())
             .unwrap()
     }
@@ -278,20 +278,22 @@ where
             <T as ComplexField>::RealField,
             ndarray::Array1<<T as ComplexField>::RealField>,
         > + argmin_math::ArgminAdd<
-            Array1<<T as ComplexField>::RealField>,
+            ndarray::Array1<<T as ComplexField>::RealField>,
             ndarray::Array1<<T as ComplexField>::RealField>,
         > + argmin_math::ArgminMul<
             <T as ComplexField>::RealField,
             ndarray::Array1<<T as ComplexField>::RealField>,
         > + AccumulateError<<T as ComplexField>::RealField>,
-    <T as ComplexField>::RealField: Default + FloatCore + RescaleIntegrationError,
+    T: Copy,
+    <T as ComplexField>::RealField:
+        Default + FloatCore + IntegrableFloat + RescaleError + std::iter::Sum,
 {
-    type RealOutput = ndarray::Array1<<T as ComplexField>::RealField>;
-    type Item = T;
-    type RealItem = <T as ComplexField>::RealField;
+    type Real = ndarray::Array1<<T as ComplexField>::RealField>;
+    type Scalar = T;
+    type Float = <T as ComplexField>::RealField;
 
-    fn modulus(&self) -> Self::RealOutput {
-        self.mapv(nalgebra::ComplexField::modulus)
+    fn modulus(&self) -> Self::Float {
+        self.iter().map(|each| each.modulus()).sum()
     }
 
     fn is_finite(&self) -> bool {
@@ -317,14 +319,17 @@ where
             <T as ComplexField>::RealField,
             ndarray::Array2<<T as ComplexField>::RealField>,
         > + AccumulateError<<T as ComplexField>::RealField>,
-    <T as ComplexField>::RealField: Default + FloatCore + RescaleIntegrationError,
+    T: Copy,
+    <T as ComplexField>::RealField:
+        Default + FloatCore + IntegrableFloat + RescaleError + std::iter::Sum,
 {
-    type RealOutput = ndarray::Array2<<T as ComplexField>::RealField>;
-    type Item = T;
-    type RealItem = <T as ComplexField>::RealField;
+    type Real = ndarray::Array2<<T as ComplexField>::RealField>;
+    type Scalar = T;
+    type Float = <T as ComplexField>::RealField;
 
-    fn modulus(&self) -> Self::RealOutput {
-        self.mapv(nalgebra::ComplexField::modulus)
+    // An L1 norm: todo maybe let the caller choose how to define the sum error
+    fn modulus(&self) -> Self::Float {
+        self.iter().map(|each| each.modulus()).sum()
     }
 
     fn is_finite(&self) -> bool {

@@ -1,14 +1,52 @@
 # quad-rs
 
-Gauss-Kronrod Integration in Rust.
-
-## Features
-
-- Adaptive integrator with high-accuracy
+This crate provides an implementation of adaptive Gauss-Kronrod integration. It aims to provide a suite of integration methods including:
+- Adaptive integration with high-accuracy
 - Native support for complex integrals and paths
-- Support for contour integration in the complex plane
+- Native support for contour integration in the complex plane
+- Native support for integration of vector and scalar valued functions
+- Optional storage and return of the integrand at the evaluation points
+
+## Overview
+---
+
+A problem to be integrated needs to implement the `Integrable` trait. This has one method `integrand`, which takes the integration variable as an argument and returns the integrand. The type of the integration variable `Input` and the integrand `Output` must also be defined.
+
+```rust
+use quad_rs::Integrable;
+
+struct Problem {}
+
+impl Integrable for Problem {
+    type Input = f64;
+    type Output = f64;
+    fn integrand(
+        &self,
+        input: &Self::Input,
+    ) -> Result<Self::Output, quad_rs::EvaluationError<Self::Input>> {
+        Ok(input.exp())
+    }
+}
+```
+
+To solve the problem an `Integrator` is used
+```rust
+use quad_rs::Integrator;
+
+let integrator = Integrator::default()
+    .with_maximum_iter(1000)
+    .relative_tolerance(1e-8);
+
+let range = std::ops::Range {
+    start: (-1f64),
+    end: 1f64,
+};
+
+let solution = integrator.integrate(Problem {}, range).unwrap();
+```
 
 ## Example - Real Integration
+
 
 
 ```rust
