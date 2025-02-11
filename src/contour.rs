@@ -20,6 +20,14 @@ pub enum Direction {
     CounterClockwise,
 }
 
+impl<I> Contour<I> {
+    pub fn reversed(self) -> Self {
+        Self {
+            range: self.range.into_iter().rev().collect(),
+        }
+    }
+}
+
 impl<I> Contour<I>
 where
     I: ComplexField + FromPrimitive + Copy,
