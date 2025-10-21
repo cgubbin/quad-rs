@@ -20,7 +20,7 @@ pub use bounds::{
 pub use error::{EvaluationError, IntegrationError};
 pub use integrate::Integrator;
 pub use solve::{AdaptiveIntegrator, AdaptiveRectangularContourIntegrator};
-pub(crate) use state::IntegrationState;
+pub use state::IntegrationState;
 
 pub(crate) use contour::split_range_once_around_singularity;
 pub use contour::{Contour, Direction};

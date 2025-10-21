@@ -1,7 +1,7 @@
 use nalgebra::ComplexField;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use trellis_runner::{ErrorEstimate, UserState};
+use trellis_runner::{UpdateData, UserState};
 
 use crate::{IntegrableFloat, IntegrationOutput, Segment, SegmentHeap, Segments, Values};
 
@@ -131,14 +131,16 @@ where
         self.get_integral().is_some()
     }
 
-    fn update(&mut self) -> ErrorEstimate<Self::Float> {
+    fn update(&mut self) -> impl Into<std::option::Option<UpdateData<<Self as UserState>::Float>>> {
         let absolute_error = self.segments.error().into_inner();
         let result = self.segments.result();
-        let relative_error = absolute_error;
-        // result.l2_norm();
+        let relative_error = absolute_error / result.l2_norm();
         self.integral = Some(result);
 
-        ErrorEstimate(relative_error)
+        Some(UpdateData::ErrorEstimate {
+            relative: relative_error,
+            absolute: absolute_error,
+        })
     }
 
     fn get_param(&self) -> Option<&O> {

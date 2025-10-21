@@ -69,7 +69,7 @@ where
                 start: points[0],
                 end: points[1],
             })
-            .collect();
+            .collect::<Vec<_>>();
 
         connected_range
     }

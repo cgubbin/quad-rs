@@ -1,7 +1,7 @@
 use super::super::split_range_once_around_singularity;
 use super::GaussKronrod;
 use super::{IntegrationError, Segment, SegmentData};
-use crate::{AccumulateError, IntegrableFloat, IntegrationOutput, RescaleError};
+use crate::{AccumulateError, Integrable, IntegrableFloat, IntegrationOutput, RescaleError};
 use nalgebra::{ComplexField, RealField};
 use num_traits::{Float, FromPrimitive};
 use rayon::prelude::*;
@@ -41,7 +41,8 @@ where
     I: ComplexField<RealField = F> + FromPrimitive + Copy,
     O: IntegrationOutput<Scalar = I, Float = F>,
     F: IntegrableFloat + Float + RealField + FromPrimitive + AccumulateError<F> + RescaleError,
-    Y: Fn(I) -> O + Copy + Send + Sync,
+    Y: std::ops::Deref + Copy + Send + Sync,
+    <Y as std::ops::Deref>::Target: Integrable<Input = I, Output = O>, //+ Copy + Send + Sync,
 {
     fn split_segment(
         &self,
@@ -94,7 +95,7 @@ where
         let center = (range.end + range.start) / two;
         let half_length = (range.end - range.start) / two;
         let abs_half_length = half_length.modulus();
-        let f_center = integrand(center);
+        let f_center = integrand.integrand(&center)?;
 
         if !f_center.is_finite() {
             return Err(IntegrationError::PossibleSingularity {
@@ -113,7 +114,8 @@ where
             .into_par_iter()
             .map(|jj| {
                 let abscissa = half_length.scale(self.xgk[jj]);
-                let fval = integrand(center - abscissa);
+                // let fval = integrand(center - abscissa);
+                let fval = integrand.integrand(&(center - abscissa))?;
                 if !fval.is_finite() {
                     return Err(IntegrationError::PossibleSingularity {
                         singularity: center - abscissa,
@@ -127,7 +129,8 @@ where
             .into_par_iter()
             .map(|jj| {
                 let abscissa = half_length.scale(self.xgk[jj]);
-                let fval = integrand(center + abscissa);
+                // let fval = integrand(center + abscissa);
+                let fval = integrand.integrand(&(center + abscissa))?;
                 if !fval.is_finite() {
                     return Err(IntegrationError::PossibleSingularity {
                         singularity: center + abscissa,

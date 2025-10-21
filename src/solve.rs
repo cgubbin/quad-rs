@@ -98,16 +98,18 @@ where
         let initial_segments = match self.singularities.len() {
             0 => self
                 .integrator
-                .gauss_kronrod(|x| problem.integrand(&x).unwrap(), self.limits.clone())
-                .unwrap(),
+                // .gauss_kronrod(|x| problem.integrand(&x).unwrap(), self.limits.clone())
+                .gauss_kronrod(&*problem, self.limits.clone())?,
             _ => split_range_around_singularities(self.limits.clone(), self.singularities.clone())
                 .into_iter()
-                .flat_map(|range| {
+                .map(|range| {
                     self.integrator
-                        .gauss_kronrod(|x| problem.integrand(&x).unwrap(), range)
-                        .unwrap()
-                        .into_iter()
+                        // .gauss_kronrod(|x| problem.integrand(&x).unwrap(), range)
+                        .gauss_kronrod(&*problem, range)
                 })
+                .collect::<Result<Vec<_>, _>>()?
+                .into_iter()
+                .flatten()
                 .collect(),
         };
 
@@ -120,10 +122,7 @@ where
         mut state: IntegrationState<I, O, F>,
     ) -> Result<IntegrationState<I, O, F>, Self::Error> {
         let worst_segment = state.pop_worst_segment().unwrap();
-        let new_segments = self
-            .integrator
-            .split_segment(|x| problem.integrand(&x).unwrap(), worst_segment)
-            .unwrap();
+        let new_segments = self.integrator.split_segment(&*problem, worst_segment)?;
         Ok(state.segments(new_segments))
     }
 
@@ -206,11 +205,14 @@ where
             .contour
             .range
             .iter()
-            .flat_map(|range| {
+            .map(|range| {
                 self.integrator
-                    .gauss_kronrod(|x| problem.integrand(&x).unwrap(), range.clone())
-                    .unwrap()
+                    // .gauss_kronrod(|x| problem.integrand(&x).unwrap(), range.clone())
+                    .gauss_kronrod(&*problem, range.clone())
             })
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .flatten()
             .collect();
         Ok(state.segments(initial_segments))
     }
@@ -223,8 +225,8 @@ where
         let worst_segment = state.pop_worst_segment().unwrap();
         let new_segments = self
             .integrator
-            .split_segment(|x| problem.integrand(&x).unwrap(), worst_segment)
-            .unwrap();
+            // .split_segment(|x| problem.integrand(&x).unwrap(), worst_segment)
+            .split_segment(&*problem, worst_segment)?;
         Ok(state.segments(new_segments))
     }
 
