@@ -1,6 +1,6 @@
 [package]
 name = "quad-rs"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2021"
 authors = ["Christopher R. Gubbin <cgubbin@protonmail.com>"]
 description = "Adaptive Gauss-Kronrod Integration in Rust"

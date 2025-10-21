@@ -320,7 +320,7 @@ dependencies = [
 
 [[package]]
 name = "quad-rs"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "approx",
  "argmin-math",
