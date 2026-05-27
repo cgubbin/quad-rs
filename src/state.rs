@@ -137,6 +137,11 @@ where
         let relative_error = absolute_error / result.l2_norm();
         self.integral = Some(result);
 
+        println!(
+            "result: {:?}, abs: {absolute_error:?}, rel: {relative_error:?}",
+            self.segments.result().l2_norm()
+        );
+
         Some(UpdateData::ErrorEstimate {
             relative: relative_error,
             absolute: absolute_error,
