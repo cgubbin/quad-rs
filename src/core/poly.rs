@@ -33,6 +33,54 @@ impl<F> GaussKronrod<F>
 where
     F: RealField + FromPrimitive + PartialOrd + Copy,
 {
+    const MAX_NEWTON_ITERS: usize = 64;
+
+    fn newton_tol() -> F {
+        F::from_f64(64.0 * f64::EPSILON).unwrap()
+    }
+
+    fn newton_legendre_root(n: usize, mut x: F, damped: bool) -> F {
+        let tol = Self::newton_tol();
+        let half = F::one() / F::from_usize(2).unwrap();
+
+        for _ in 0..Self::MAX_NEWTON_ITERS {
+            let (p_n, dp_n) = Self::legendre_value_and_derivative(n, x);
+
+            let delta = p_n / dp_n;
+
+            if damped {
+                x -= half * delta;
+            } else {
+                x -= delta;
+            }
+
+            if delta.modulus() <= tol * x.modulus().max(F::one()) {
+                break;
+            }
+        }
+
+        x
+    }
+
+    fn newton_chebyshev_root(mut x: F, coeffs: &[F]) -> F {
+        let tol = Self::newton_tol();
+        let mut error = F::zero();
+
+        for _ in 0..Self::MAX_NEWTON_ITERS {
+            let e = Self::chebyshev_series(x, &mut error, coeffs);
+            let de = Self::chebyshev_series_derivative(x, coeffs);
+
+            let delta = e / de;
+            x -= delta;
+
+            if delta.modulus() <= tol * x.modulus().max(F::one()) {
+                break;
+            }
+        }
+
+        x
+    }
+
     /// Computes the roots of the Legendre polynomial `P_m`.
     ///
     /// The roots are returned in ascending order and lie in `(-1, 1)`.
@@ -52,67 +100,68 @@ where
     ///
     /// Panics if numeric constants cannot be represented as `F`.
     pub(crate) fn compute_legendre_zeros(m: usize) -> Vec<F> {
-        let mut tmp = vec![F::zero(); m + 1];
+        let mut next_roots = vec![F::zero(); m + 1];
         let mut scratch = vec![F::zero(); m + 2];
         scratch[0] = -F::one();
 
         for k in 1..=m {
             scratch[k] = F::one();
             for j in 0..k {
-                let mut delta = F::one();
-                let mut x_j = F::from_f64(1e-10).unwrap()
-                    + (scratch[j] + scratch[j + 1]) / F::from_usize(2).unwrap();
-                let mut p_k = GaussKronrod::legendre_polynomial(k, x_j);
-                let mut epsilon = GaussKronrod::legendre_polynomial_error(k, x_j);
-                // Do Newtons method to find the zero
-                while p_k.modulus() > epsilon
-                    && delta.modulus() > F::from_f64(f64::EPSILON).unwrap()
-                {
-                    delta = p_k / GaussKronrod::legendre_derivative(k, x_j);
-                    x_j -= F::from_f64(0.5).unwrap() * delta;
-                    p_k = GaussKronrod::legendre_polynomial(k, x_j);
-                    epsilon = GaussKronrod::legendre_polynomial_error(k, x_j);
-                }
-                tmp[j] = x_j;
+                let two = F::from_usize(2).unwrap();
+
+                let initial = F::from_f64(1e-10).unwrap() + (scratch[j] + scratch[j + 1]) / two;
+
+                next_roots[j] = Self::newton_legendre_root(k, initial, true);
             }
             scratch[k + 1] = scratch[k];
 
-            scratch[1..(k + 1 + 1)].clone_from_slice(&tmp[..(k + 1)]);
+            scratch[1..(k + 1 + 1)].clone_from_slice(&next_roots[..(k + 1)]);
         }
         scratch[1..m + 1].to_owned()
     }
 
-    /**
-     * Computes coefficients of Chebyshev polynomial \f$E_{m+1}\f$ in the array \c coeffs[].
-     * This uses the results of https://www.jstor.org/stable/2006272, particularly
-     * Equations 12 - 14.
-     */
+    /// Computes the Chebyshev coefficients of the Kronrod extension polynomial.
+    ///
+    /// The returned vector contains coefficients `c_k` such that
+    /// `E_{m+1}(x) = sum_k c_k T_k(x)`, where `T_k` is the `k`th Chebyshev
+    /// polynomial of the first kind.
+    ///
+    /// The recurrence follows the construction described by Laurie, especially
+    /// equations 12--14.
+    ///
+    /// # Parameters
+    ///
+    /// - `m`: Degree of the embedded Gauss rule.
+    ///
+    /// # Returns
+    ///
+    /// Chebyshev coefficients indexed by polynomial degree.
     pub(crate) fn compute_chebyshev_coefficients(m: usize) -> Vec<F> {
-        let el = (m + 1) / 2;
-        let mut alpha = vec![F::zero(); el + 1];
-        let mut f = vec![F::zero(); el + 1];
+        let half_degree = (m + 1) / 2;
+        let mut alpha = vec![F::zero(); half_degree + 1];
+        let mut recurrence_coeffs = vec![F::zero(); half_degree + 1];
         let mut coeffs = vec![F::zero(); m + 2];
 
-        f[1] = F::from_f64((m as f64 + 1.) / (2. * m as f64 + 3.)).unwrap();
+        recurrence_coeffs[1] = F::from_f64((m as f64 + 1.) / (2. * m as f64 + 3.)).unwrap();
         alpha[0] = F::one(); // coefficient of T_{m+1}
-        alpha[1] = -f[1];
+        alpha[1] = -recurrence_coeffs[1];
 
-        for k in 2..=el {
+        for k in 2..=half_degree {
             let kd = k - 1;
-            f[kd + 1] = f[kd]
+            recurrence_coeffs[kd + 1] = recurrence_coeffs[kd]
                 * F::from_f64(
                     (((2 * kd + 1) * (m + kd + 1)) as f64)
                         / (((kd + 1) * (2 * m + 2 * kd + 3)) as f64),
                 )
                 .unwrap();
-            alpha[kd + 1] = -f[kd + 1];
+            alpha[kd + 1] = -recurrence_coeffs[kd + 1];
             for i in 1..k {
                 let x = alpha[k - i];
-                alpha[k] -= f[i] * x;
+                alpha[k] -= recurrence_coeffs[i] * x;
             }
         }
 
-        for (k, a) in alpha.into_iter().enumerate().take(el + 1) {
+        for (k, a) in alpha.into_iter().enumerate().take(half_degree + 1) {
             coeffs[m + 1 - 2 * k] = a;
             if m >= 2 * k {
                 coeffs[m - 2 * k] = F::zero();
@@ -121,39 +170,61 @@ where
         coeffs
     }
 
-    /**
-     * Calculate the Gauss-Kronrod abscissa using Newtons method
-     */
+    /// Computes the positive Gauss--Kronrod abscissae.
+    ///
+    /// The Kronrod nodes are found by Newton iteration on the extension polynomial
+    /// whose Chebyshev coefficients are supplied in `coeffs`. The Gauss nodes in
+    /// `zeros` are interlaced with the newly computed Kronrod nodes.
+    ///
+    /// # Parameters
+    ///
+    /// - `m`: Degree of the Gauss rule.
+    /// - `coeffs`: Chebyshev coefficients of the extension polynomial.
+    /// - `zeros`: Roots of `P_m`.
+    ///
+    /// # Returns
+    ///
+    /// The positive-half interlaced Gauss--Kronrod abscissae.
     pub(crate) fn compute_gauss_kronrod_abscissae(m: usize, coeffs: &[F], zeros: &[F]) -> Vec<F> {
+        let two = F::from_usize(2).unwrap();
+        let tol: F = Self::newton_tol();
+
         let n = m + 1;
         let mut abscissae = vec![F::zero(); n];
-        let mut epsilon = F::zero();
-        let mut zerosb = vec![F::zero(); zeros.len() + 2];
-        zerosb[1..(zeros.len() + 1)].clone_from_slice(zeros);
-        zerosb[0] = F::from_f64(-1.).unwrap();
-        zerosb[zeros.len() + 1] = F::one();
+        let mut bracketed_zeros = vec![F::zero(); zeros.len() + 2];
+        bracketed_zeros[1..(zeros.len() + 1)].clone_from_slice(zeros);
+        bracketed_zeros[0] = -F::one();
+        bracketed_zeros[zeros.len() + 1] = F::one();
         for k in 0..n / 2 {
-            let mut delta = F::one();
-            // Do Newton's method for E_{n+1}
-            let mut x_k = F::from_f64(1e-10).unwrap()
-                + (zerosb[m - k] + zerosb[m + 1 - k]) / F::from_usize(2).unwrap();
-            let mut e = GaussKronrod::chebyshev_series(x_k, &mut epsilon, coeffs);
-            while e.modulus() > epsilon && delta.modulus() > F::from_f64(f64::EPSILON).unwrap() {
-                delta = e / GaussKronrod::chebyshev_series_derivative(x_k, coeffs);
-                x_k -= delta;
-                e = GaussKronrod::chebyshev_series(x_k, &mut epsilon, coeffs)
-            }
-            abscissae[2 * k] = x_k;
+            let two = F::from_usize(2).unwrap();
+
+            let initial = F::from_f64(1e-10).unwrap()
+                + (bracketed_zeros[m - k] + bracketed_zeros[m + 1 - k]) / two;
+
+            abscissae[2 * k] = Self::newton_chebyshev_root(initial, coeffs);
+
             if 2 * k + 1 < n {
-                abscissae[2 * k + 1] = zerosb[m - k];
+                abscissae[2 * k + 1] = bracketed_zeros[m - k];
             }
         }
         abscissae
     }
 
-    /**
-     * Find the corresponding Gauss-Kronrod weight coefficients
-     */
+    /// Computes the Gauss and Gauss--Kronrod weights for a rule.
+    ///
+    /// The input abscissae must be the interlaced Gauss--Kronrod nodes produced by
+    /// [`compute_gauss_kronrod_abscissae`]. Odd-indexed nodes correspond to the
+    /// embedded Gauss nodes; even-indexed nodes correspond to Kronrod-only nodes.
+    ///
+    /// # Parameters
+    ///
+    /// - `gauss_kronrod_abscissae`: Interlaced rule nodes.
+    /// - `coeffs`: Chebyshev coefficients of the Kronrod extension polynomial.
+    ///
+    /// # Returns
+    ///
+    /// A [`Weights`] value containing the embedded Gauss weights and the full
+    /// Gauss--Kronrod weights.
     pub(crate) fn compute_gauss_kronrod_weights(
         gauss_kronrod_abscissae: &[F],
         coeffs: &[F],
@@ -162,14 +233,15 @@ where
         let m = n - 1;
 
         let two = F::from_usize(2).unwrap();
-        let m_simd = F::from_usize(m).unwrap();
+        let m_f = F::from_usize(m).unwrap();
 
         let gauss_weights: Vec<F> = (0..n / 2)
             .map(|k| {
                 let x = gauss_kronrod_abscissae[2 * k + 1];
-                -two / ((m_simd + F::one())
-                    * GaussKronrod::legendre_derivative(m, x)
-                    * GaussKronrod::legendre_polynomial(m + 1, x))
+                let (_, dp_m) = Self::legendre_value_and_derivative(m, x);
+                let (p_mp1, _) = Self::legendre_value_and_derivative(m + 1, x);
+
+                -two / ((m_f + F::one()) * dp_m * p_mp1)
             })
             .collect();
 
@@ -185,13 +257,13 @@ where
             .enumerate()
             .map(|(k, &x)| {
                 if k % 2 == 0 {
-                    f_m / (GaussKronrod::legendre_polynomial(m, x)
-                        * GaussKronrod::chebyshev_series_derivative(x, coeffs))
+                    f_m / (Self::legendre_value_and_derivative(m, x).0
+                        * Self::chebyshev_series_derivative(x, coeffs))
                 } else {
                     gauss_weights[k / 2]
                         + f_m
-                            / (GaussKronrod::legendre_derivative(m, x)
-                                * GaussKronrod::chebyshev_series(x, &mut error, coeffs))
+                            / (Self::legendre_value_and_derivative(m, x).1
+                                * Self::chebyshev_series(x, &mut error, coeffs))
                 }
             })
             .collect();
@@ -201,69 +273,43 @@ where
         }
     }
 
-    /**
-     * Recursive definition of the Legendre polynomials
-     * \f[ (k+1) P_{k+1}(x) = (2k+1) x P_k(x) - k P_{k-1}(x),\f]
-     * from the routine <tt>gsl_sf_legendre_Pl_e</tt> distributed with GSL.
-     */
-    fn legendre_polynomial(n: usize, x: F) -> F {
+    /// Evaluates `P_n(x)` and `P'_n(x)` using iterative three-term recurrences.
+    fn legendre_value_and_derivative(n: usize, x: F) -> (F, F) {
         if n == 0 {
-            F::one()
-        } else if n == 1 {
-            x
-        } else {
-            let nn = F::from_usize(n).unwrap();
-            (((F::from_f64(2.).unwrap() * nn) - F::one())
-                * x
-                * GaussKronrod::legendre_polynomial(n - 1, x)
-                - (nn - F::one()) * GaussKronrod::legendre_polynomial(n - 2, x))
-                / nn
+            return (F::one(), F::zero());
         }
+
+        if n == 1 {
+            return (x, F::one());
+        }
+
+        let one = F::one();
+        let two = F::from_usize(2).unwrap();
+
+        let mut p_nm2 = one;
+        let mut p_nm1 = x;
+
+        let mut dp_nm2 = F::zero();
+        let mut dp_nm1 = one;
+
+        for k in 1..n {
+            let k_f = F::from_usize(k).unwrap();
+            let kp1_f = F::from_usize(k + 1).unwrap();
+
+            let p_n = ((two * k_f + one) * x * p_nm1 - k_f * p_nm2) / kp1_f;
+            let dp_n = (two * k_f + one) * p_nm1 + dp_nm2;
+
+            p_nm2 = p_nm1;
+            p_nm1 = p_n;
+
+            dp_nm2 = dp_nm1;
+            dp_nm1 = dp_n;
+        }
+
+        (p_nm1, dp_nm1)
     }
 
-    /**
-     * Recusive defintion of the rounding error
-     * \f[ E_{k+1} = \frac{(2k+1)|x|E_k + kE_{k-1}}{2(k+1)},\f]
-     * from <tt>gsl_sf_legendre_Pl_e</tt> as distributed with GSL.
-     */
-    fn legendre_polynomial_error(n: usize, x: F) -> F {
-        if n == 0 || n == 1 {
-            F::zero()
-        } else {
-            let nn = F::from_usize(n).unwrap();
-            let two = F::from_usize(2).unwrap();
-            ((two * nn - F::one())
-                * x.modulus()
-                * GaussKronrod::legendre_polynomial_error(n - 1, x)
-                - (nn - F::one()) * GaussKronrod::legendre_polynomial_error(n - 2, x))
-                / (two * nn)
-        }
-    }
-
-    /**
-    Three-term recursion identity for the Legendre derivatives:
-    \f[ P_{k+1}'(x) = (2k+1) P_k(x) + P_{k-1}'(x).
-    \f]
-    */
-    fn legendre_derivative(n: usize, x: F) -> F {
-        if n == 0 {
-            F::zero()
-        } else if n == 1 {
-            F::one()
-        } else {
-            (F::from_usize(2usize * n).unwrap() - F::one())
-                * GaussKronrod::legendre_polynomial(n - 1, x)
-                + GaussKronrod::legendre_derivative(n - 2, x)
-        }
-    }
-
-    /**
-     * Implements Clenshaw's algorithm to calculate the sum of Chebyshev
-     * series weighted by the input coefficient vector `coeffs`
-     * see `A Note on the Summation of Chebyshev Series` for a derivation
-     * The recurrance relation is
-     * T_{m+2} = 2 x T_{m+1} - T_{m}
-     */
+    /// Evaluates a Chebyshev series using Clenshaw recurrence.
     fn chebyshev_series(x: F, error: &mut F, coeffs: &[F]) -> F {
         let mut d1 = F::zero();
         let mut d2 = F::zero();
@@ -279,15 +325,7 @@ where
         d1 - x * d2
     }
 
-    /**
-     * Implements Clenshaw's algorithm to calculate the sum of Chebyshev
-     * series derivatives weighted by the input coefficient vector `coeffs`
-     * see `A Note on the Summation of Chebyshev Series` for a derivation
-     * The recurrance relation is
-     * T_{m+2}' = 2 T_{m+1} + 2 x T_{m+1}' - T_{m}'
-     * See https://scicomp.stackexchange.com/questions/27865/clenshaw-type-recurrence-for-derivative-of-chebyshev-series
-     * for a nice discussion
-     */
+    /// Evaluates the derivative of a Chebyshev series using a Clenshaw-type recurrence.
     fn chebyshev_series_derivative(x: F, coeffs: &[F]) -> F {
         let mut d1 = F::zero();
         let mut d2 = F::zero();
@@ -304,9 +342,13 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::GaussKronrod;
+    use super::*;
     use approx::assert_relative_eq;
     use rand::Rng;
+
+    type GK = GaussKronrod<f64>;
+
+    const TOL: f64 = 1e-12;
 
     /// Test that the computed Legendre polynomials are correct
     /// by comparing to analytical values up to order 10.
@@ -347,12 +389,8 @@ mod tests {
                 / 256.,
         ];
         for (n, analytical_result) in analytical_results.into_iter().enumerate() {
-            let calculated_result = GaussKronrod::legendre_polynomial(n, x);
-            assert_relative_eq!(
-                calculated_result,
-                analytical_result,
-                epsilon = 1000. * f64::EPSILON
-            );
+            let calculated_result = GaussKronrod::legendre_value_and_derivative(n, x).0;
+            assert_relative_eq!(calculated_result, analytical_result, epsilon = TOL);
         }
     }
 
@@ -396,12 +434,8 @@ mod tests {
                 / 128.,
         ];
         for (n, analytical_result) in analytical_results.into_iter().enumerate() {
-            let calculated_result = GaussKronrod::legendre_derivative(n, x);
-            assert_relative_eq!(
-                calculated_result,
-                analytical_result,
-                epsilon = 10000. * f64::EPSILON
-            );
+            let calculated_result = GaussKronrod::legendre_value_and_derivative(n, x).1;
+            assert_relative_eq!(calculated_result, analytical_result, epsilon = TOL);
         }
     }
 
@@ -442,7 +476,7 @@ mod tests {
             for (analytical_zero, calculated_zero) in
                 analytical_result.into_iter().zip(calculated_result)
             {
-                assert_relative_eq!(analytical_zero, calculated_zero);
+                assert_relative_eq!(analytical_zero, calculated_zero, epsilon = TOL);
             }
         }
     }
@@ -484,11 +518,7 @@ mod tests {
             chebyshev_analytical += coeff * cheby_derivative(n, x);
             let chebyshev_calculated =
                 GaussKronrod::chebyshev_series_derivative(x, &coeffs[0..n + 1]);
-            assert_relative_eq!(
-                chebyshev_calculated,
-                chebyshev_analytical,
-                epsilon = 1000. * f64::EPSILON
-            );
+            assert_relative_eq!(chebyshev_calculated, chebyshev_analytical, epsilon = TOL);
         }
     }
 
@@ -507,11 +537,7 @@ mod tests {
             chebyshev_analytical += coeff * cheby(n, x);
             let chebyshev_calculated =
                 GaussKronrod::chebyshev_series(x, &mut _err, &coeffs[0..n + 1]);
-            assert_relative_eq!(
-                chebyshev_calculated,
-                chebyshev_analytical,
-                epsilon = 1000. * f64::EPSILON
-            );
+            assert_relative_eq!(chebyshev_calculated, chebyshev_analytical, epsilon = TOL);
         }
     }
 
@@ -540,7 +566,7 @@ mod tests {
         let abscissae = GaussKronrod::compute_gauss_kronrod_abscissae(order, &coeffs, &zeros);
 
         for (value, calculated) in values.into_iter().zip(abscissae) {
-            assert_relative_eq!(value, calculated);
+            assert_relative_eq!(value, calculated, epsilon = TOL);
         }
     }
 
@@ -570,7 +596,7 @@ mod tests {
         let weights = GaussKronrod::compute_gauss_kronrod_weights(&abscissae, &coeffs);
 
         for (value, calculated) in values.into_iter().zip(weights.gauss_kronrod) {
-            assert_relative_eq!(value, calculated, epsilon = 10. * f64::EPSILON);
+            assert_relative_eq!(value, calculated, epsilon = TOL);
         }
     }
 
@@ -594,7 +620,159 @@ mod tests {
         let weights = GaussKronrod::compute_gauss_kronrod_weights(&abscissae, &coeffs);
 
         for (value, calculated) in values.into_iter().zip(weights.gauss) {
-            assert_relative_eq!(value, calculated, epsilon = 10. * f64::EPSILON);
+            assert_relative_eq!(value, calculated, epsilon = TOL);
+        }
+    }
+
+    fn assert_close(a: f64, b: f64) {
+        approx::assert_relative_eq!(a, b, epsilon = TOL);
+    }
+
+    #[test]
+    fn legendre_values_are_correct_for_low_degrees() {
+        let x = 0.37;
+
+        assert_close(GK::legendre_value_and_derivative(0, x).0, 1.0);
+        assert_close(GK::legendre_value_and_derivative(1, x).0, x);
+        assert_close(
+            GK::legendre_value_and_derivative(2, x).0,
+            (3.0 * x * x - 1.0) / 2.0,
+        );
+        assert_close(
+            GK::legendre_value_and_derivative(3, x).0,
+            (5.0 * x * x * x - 3.0 * x) / 2.0,
+        );
+        assert_close(
+            GK::legendre_value_and_derivative(4, x).0,
+            (35.0 * x.powi(4) - 30.0 * x * x + 3.0) / 8.0,
+        );
+    }
+
+    #[test]
+    fn legendre_derivatives_are_correct_for_low_degrees() {
+        let x = 0.37;
+
+        assert_close(GK::legendre_value_and_derivative(0, x).1, 0.0);
+        assert_close(GK::legendre_value_and_derivative(1, x).1, 1.0);
+        assert_close(GK::legendre_value_and_derivative(2, x).1, 3.0 * x);
+        assert_close(
+            GK::legendre_value_and_derivative(3, x).1,
+            (15.0 * x * x - 3.0) / 2.0,
+        );
+        assert_close(
+            GK::legendre_value_and_derivative(4, x).1,
+            (140.0 * x.powi(3) - 60.0 * x) / 8.0,
+        );
+    }
+
+    #[test]
+    fn legendre_zeros_are_roots() {
+        for n in 1..12 {
+            let zeros = GK::compute_legendre_zeros(n);
+
+            assert_eq!(zeros.len(), n);
+
+            for &x in &zeros {
+                assert!(x > -1.0 && x < 1.0, "root {x} for n={n} is outside (-1, 1)");
+
+                assert!(
+                    GK::legendre_value_and_derivative(n, x).0.abs() < TOL,
+                    "P_{n}({x}) = {}",
+                    GK::legendre_value_and_derivative(n, x).0
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn legendre_zeros_are_strictly_increasing() {
+        for n in 1..16 {
+            let zeros = GK::compute_legendre_zeros(n);
+
+            for pair in zeros.windows(2) {
+                assert!(
+                    pair[0] < pair[1],
+                    "zeros are not strictly increasing for n={n}: {:?}",
+                    zeros
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn chebyshev_series_evaluates_known_polynomial() {
+        // coeffs represent:
+        // 1*T_0(x) + 2*T_1(x) + 3*T_2(x)
+        //
+        // T_0 = 1
+        // T_1 = x
+        // T_2 = 2x^2 - 1
+        //
+        // so the polynomial is:
+        // 1 + 2x + 3(2x^2 - 1) = 6x^2 + 2x - 2
+        let coeffs = vec![1.0, 2.0, 3.0];
+        let mut error = 0.0;
+
+        for &x in &[-0.9, -0.25, 0.0, 0.4, 0.8] {
+            let expected = 6.0 * x * x + 2.0 * x - 2.0;
+            let actual = GK::chebyshev_series(x, &mut error, &coeffs);
+
+            assert_close(actual, expected);
+        }
+    }
+
+    #[test]
+    fn chebyshev_series_derivative_evaluates_known_derivative() {
+        // Same polynomial as above:
+        // 6x^2 + 2x - 2
+        //
+        // derivative:
+        // 12x + 2
+        let coeffs = vec![1.0, 2.0, 3.0];
+
+        for &x in &[-0.9, -0.25, 0.0, 0.4, 0.8] {
+            let expected = 12.0 * x + 2.0;
+            let actual = GK::chebyshev_series_derivative(x, &coeffs);
+
+            assert_close(actual, expected);
+        }
+    }
+
+    #[test]
+    fn kronrod_abscissae_have_expected_interlacing_structure() {
+        for m in 2..10 {
+            let zeros = GK::compute_legendre_zeros(m);
+            let coeffs = GK::compute_chebyshev_coefficients(m);
+            let abscissae = GK::compute_gauss_kronrod_abscissae(m, &coeffs, &zeros);
+
+            assert_eq!(abscissae.len(), m + 1);
+
+            for k in 0..abscissae.len() / 2 {
+                assert_close(abscissae[2 * k + 1], zeros[m - k - 1]);
+            }
+        }
+    }
+
+    #[test]
+    fn computed_weights_are_finite_and_positive() {
+        for m in 2..10 {
+            let zeros = GK::compute_legendre_zeros(m);
+            let coeffs = GK::compute_chebyshev_coefficients(m);
+            let abscissae = GK::compute_gauss_kronrod_abscissae(m, &coeffs, &zeros);
+            let weights = GK::compute_gauss_kronrod_weights(&abscissae, &coeffs);
+
+            assert_eq!(weights.gauss.len(), (m + 1) / 2);
+            assert_eq!(weights.gauss_kronrod.len(), m + 1);
+
+            for &w in &weights.gauss {
+                assert!(w.is_finite());
+                assert!(w > 0.0, "non-positive Gauss weight {w}");
+            }
+
+            for &w in &weights.gauss_kronrod {
+                assert!(w.is_finite());
+                assert!(w > 0.0, "non-positive Kronrod weight {w}");
+            }
         }
     }
 }
