@@ -1,3 +1,25 @@
+//! Construction of Gauss--Kronrod quadrature nodes and weights.
+//!
+//! This module computes the non-default Gauss--Kronrod rule associated with a
+//! Gauss rule of degree `m`. The construction follows the Laurie/Gautschi
+//! approach: first compute the roots of the Legendre polynomial `P_m`, then
+//! construct the Chebyshev expansion of the Kronrod extension polynomial,
+//! locate the interlacing Kronrod abscissae by Newton iteration, and finally
+//! compute the corresponding Gauss and Gauss--Kronrod weights.
+//!
+//! The returned abscissae and weights are for the positive half of the symmetric
+//! rule on `[-1, 1]`; callers are expected to apply symmetry when evaluating the
+//! quadrature rule.
+//!
+//! # Numerical notes
+//!
+//! The implementation assumes that Newton iteration converges from the
+//! interlacing intervals implied by the Gauss nodes. All root-finding routines
+//! should use a finite iteration limit and a precision-dependent termination
+//! criterion. The implementation is generic over `F`, but constants currently
+//! pass through `f64`, so using precision wider than `f64` may not improve the
+//! generated rule.
+
 use super::GaussKronrod;
 use nalgebra::RealField;
 use num_traits::FromPrimitive;
@@ -11,9 +33,24 @@ impl<F> GaussKronrod<F>
 where
     F: RealField + FromPrimitive + PartialOrd + Copy,
 {
-    /**
-     * Computes the zero crossings of the Legendre polynomial \f$P_m$\f and assigns to array \c zeros[].
-     */
+    /// Computes the roots of the Legendre polynomial `P_m`.
+    ///
+    /// The roots are returned in ascending order and lie in `(-1, 1)`.
+    /// The routine builds roots degree by degree, using the previously computed
+    /// roots to bracket the roots of the next Legendre polynomial and Newton
+    /// iteration to refine each root.
+    ///
+    /// # Parameters
+    ///
+    /// - `m`: Degree of the Legendre polynomial.
+    ///
+    /// # Returns
+    ///
+    /// A vector containing the `m` roots of `P_m`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if numeric constants cannot be represented as `F`.
     pub(crate) fn compute_legendre_zeros(m: usize) -> Vec<F> {
         let mut tmp = vec![F::zero(); m + 1];
         let mut scratch = vec![F::zero(); m + 2];
