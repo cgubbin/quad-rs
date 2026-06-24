@@ -21,8 +21,7 @@
 //! generated rule.
 
 use super::GaussKronrod;
-use nalgebra::RealField;
-use num_traits::FromPrimitive;
+use num_traits::{Float, FromPrimitive};
 
 pub(crate) struct Weights<F> {
     pub(crate) gauss: Vec<F>,
@@ -31,7 +30,7 @@ pub(crate) struct Weights<F> {
 
 impl<F> GaussKronrod<F>
 where
-    F: RealField + FromPrimitive + PartialOrd + Copy,
+    F: Float + FromPrimitive + std::ops::SubAssign + std::ops::AddAssign,
 {
     const MAX_NEWTON_ITERS: usize = 64;
 
@@ -54,7 +53,7 @@ where
                 x -= delta;
             }
 
-            if delta.modulus() <= tol * x.modulus().max(F::one()) {
+            if delta.abs() <= tol * x.abs().max(F::one()) {
                 break;
             }
         }
@@ -73,7 +72,7 @@ where
             let delta = e / de;
             x -= delta;
 
-            if delta.modulus() <= tol * x.modulus().max(F::one()) {
+            if delta.abs() <= tol * x.abs().max(F::one()) {
                 break;
             }
         }
@@ -313,13 +312,13 @@ where
     fn chebyshev_series(x: F, error: &mut F, coeffs: &[F]) -> F {
         let mut d1 = F::zero();
         let mut d2 = F::zero();
-        let mut absc = coeffs[0].modulus();
+        let mut absc = coeffs[0].abs();
         let two = F::from_f64(2.).unwrap();
         for &coeff in coeffs.iter().rev() {
             let tmp = d1;
             d1 = two * x * d1 - d2 + coeff;
             d2 = tmp;
-            absc += coeff.modulus();
+            absc += coeff.abs();
         }
         *error = absc * F::from_f64(f64::EPSILON).unwrap();
         d1 - x * d2
