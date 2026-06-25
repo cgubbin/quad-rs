@@ -16,7 +16,6 @@
 //! [`ErrorNorm`] controls how componentwise errors are reduced for vector-like
 //! outputs.
 
-use argmin_math::{ArgminAdd, ArgminDiv, ArgminMul, ArgminSub};
 use nalgebra::ComplexField;
 use num_complex::Complex;
 
@@ -58,19 +57,16 @@ pub enum ErrorNorm {
 ///   integration this is usually `f64`; for contour integration this is usually
 ///   `Complex<f64>`.
 /// - [`Float`](Self::Float): underlying real floating-point type.
-pub trait IntegrationOutput:
-    Clone
-    + Default
-    + ArgminSub<Self, Self>
-    + ArgminMul<<Self as IntegrationOutput>::Scalar, Self>
-    + ArgminDiv<<Self as IntegrationOutput>::Scalar, Self>
-    + ArgminAdd<Self, Self>
-{
+pub trait IntegrationOutput: Clone + Default {
     /// Scalar type used to scale this output.
     type Scalar: ComplexField<RealField = Self::Float>;
 
     /// Underlying real floating-point type.
     type Float: IntegrableFloat;
+
+    fn add(&self, other: &Self) -> Self;
+    fn sub(&self, other: &Self) -> Self;
+    fn mul_scalar(&self, scalar: &Self::Scalar) -> Self;
 
     /// Returns a scalar magnitude for this output.
     ///
@@ -100,6 +96,16 @@ impl IntegrationOutput for Complex<f32> {
     type Scalar = Self;
     type Float = f32;
 
+    fn add(&self, other: &Self) -> Self {
+        self + other
+    }
+    fn sub(&self, other: &Self) -> Self {
+        self - other
+    }
+    fn mul_scalar(&self, scalar: &Self::Scalar) -> Self {
+        self * scalar
+    }
+
     fn modulus(&self) -> Self::Float {
         <Self as ComplexField>::modulus(*self)
     }
@@ -120,6 +126,16 @@ impl IntegrationOutput for Complex<f32> {
 impl IntegrationOutput for f32 {
     type Scalar = Self;
     type Float = Self;
+
+    fn add(&self, other: &Self) -> Self {
+        self + other
+    }
+    fn sub(&self, other: &Self) -> Self {
+        self - other
+    }
+    fn mul_scalar(&self, scalar: &Self::Scalar) -> Self {
+        self * scalar
+    }
 
     fn modulus(&self) -> Self::Float {
         <Self as ComplexField>::modulus(*self)
@@ -142,6 +158,16 @@ impl IntegrationOutput for Complex<f64> {
     type Scalar = Self;
     type Float = f64;
 
+    fn add(&self, other: &Self) -> Self {
+        self + other
+    }
+    fn sub(&self, other: &Self) -> Self {
+        self - other
+    }
+    fn mul_scalar(&self, scalar: &Self::Scalar) -> Self {
+        self * scalar
+    }
+
     fn modulus(&self) -> Self::Float {
         <Self as ComplexField>::modulus(*self)
     }
@@ -163,6 +189,16 @@ impl IntegrationOutput for f64 {
     type Scalar = Self;
     type Float = Self;
 
+    fn add(&self, other: &Self) -> Self {
+        self + other
+    }
+    fn sub(&self, other: &Self) -> Self {
+        self - other
+    }
+    fn mul_scalar(&self, scalar: &Self::Scalar) -> Self {
+        self * scalar
+    }
+
     fn modulus(&self) -> Self::Float {
         <Self as ComplexField>::modulus(*self)
     }
@@ -181,7 +217,7 @@ impl IntegrationOutput for f64 {
 }
 
 #[cfg(feature = "ndarray")]
-use ndarray::{Array, Dimension, Ix1};
+use ndarray::{Array, Dimension};
 
 #[cfg(feature = "ndarray")]
 impl<T, D> IntegrationOutput for Array<T, D>
@@ -189,10 +225,21 @@ where
     D: Dimension,
     T: ComplexField + Copy + Default,
     T::RealField: IntegrableFloat + std::iter::Sum,
-    Self: ArgminAdd<Self, Self> + ArgminSub<Self, Self> + ArgminMul<T, Self> + ArgminDiv<T, Self>,
 {
     type Scalar = T;
     type Float = T::RealField;
+
+    fn add(&self, other: &Self) -> Self {
+        self + other
+    }
+
+    fn sub(&self, other: &Self) -> Self {
+        self - other
+    }
+
+    fn mul_scalar(&self, scalar: &Self::Scalar) -> Self {
+        self.mapv(|value| value * *scalar)
+    }
 
     fn modulus(&self) -> Self::Float {
         self.iter()
@@ -209,26 +256,24 @@ where
     }
 
     fn max_component(&self) -> Self::Float {
-        self.iter()
-            .map(|value| value.modulus())
-            .fold(
-                Self::Float::zero(),
-                |acc, value| {
-                    if value > acc { value } else { acc }
-                },
-            )
+        self.iter().map(|value| value.modulus()).fold(
+            <Self::Float as num_traits::Float>::neg_zero(),
+            |acc, value| {
+                if value > acc { value } else { acc }
+            },
+        )
     }
 
     fn mean_component(&self) -> Self::Float {
         if self.is_empty() {
-            return Self::Float::zero();
+            return <Self::Float as num_traits::Float>::neg_zero();
         }
 
         let sum = self
             .iter()
             .map(|value| value.modulus())
             .sum::<Self::Float>();
-        sum / Self::Float::from_usize(self.len()).unwrap()
+        sum / <Self::Float as num_traits::FromPrimitive>::from_usize(self.len()).unwrap()
     }
 }
 

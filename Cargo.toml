@@ -14,7 +14,6 @@ readme = "README.md"
 
 [dependencies]
 approx = "0.5.1"
-argmin-math = "0.3.0"
 nalgebra = "0.33.2"
 ndarray = { version = "0.15.6", optional = true }
 ndarray-stats = { version = "0.5.1", optional = true }
@@ -31,3 +30,11 @@ ndarray = ["dep:ndarray", "dep:ndarray-stats"]
 
 [dev-dependencies]
 rand = "0.8.4"
+
+[[example]]
+name = "vector_valued"
+required-features = ["ndarray"]
+
+[[example]]
+name = "matrix_valued"
+required-features = ["ndarray"]

@@ -36,7 +36,6 @@
 //! The scalar error is then rescaled using the QUADPACK-style rescaling
 //! procedure.
 
-use argmin_math::{ArgminAdd, ArgminMul, ArgminSub};
 use nalgebra::ComplexField;
 use num_traits::{Float, FromPrimitive};
 
@@ -420,13 +419,13 @@ impl<F> GaussKronrod<F> {
             None
         };
 
-        let mut result_kronrod = f_center.mul(&center_physical_weight);
+        let mut result_kronrod = f_center.mul_scalar(&center_physical_weight);
         let mut result_abs = f_center.modulus() * center_abs_weight;
 
         let mut result_gauss = if self.n % 2 == 0 {
             let gauss_weight = self.wg[self.n / 2 - 1];
             let physical_weight = jac_center * Y::Input::from_real(gauss_weight * half_f);
-            Some(f_center.mul(&physical_weight))
+            Some(f_center.mul_scalar(&physical_weight))
         } else {
             None
         };
@@ -458,8 +457,8 @@ impl<F> GaussKronrod<F> {
             let weight_right = jac_right * Y::Input::from_real(wk * half_f);
 
             result_kronrod = result_kronrod
-                .add(&f_left.mul(&weight_left))
-                .add(&f_right.mul(&weight_right));
+                .add(&f_left.mul_scalar(&weight_left))
+                .add(&f_right.mul_scalar(&weight_right));
 
             result_abs = result_abs
                 + f_left.modulus() * jac_left.modulus() * wk * half_f
@@ -473,8 +472,8 @@ impl<F> GaussKronrod<F> {
                 let gauss_weight_right = jac_right * Y::Input::from_real(wg * half_f);
 
                 let contribution = f_left
-                    .mul(&gauss_weight_left)
-                    .add(&f_right.mul(&gauss_weight_right));
+                    .mul_scalar(&gauss_weight_left)
+                    .add(&f_right.mul_scalar(&gauss_weight_right));
 
                 result_gauss = Some(match result_gauss {
                     Some(current) => current.add(&contribution),

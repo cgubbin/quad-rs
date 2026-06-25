@@ -42,6 +42,7 @@ where
 /// The configuration is intentionally separate from the integrator state. The
 /// config describes how the algorithm should run; the state records what has
 /// happened during a particular run.
+#[derive(Clone, Debug)]
 pub struct IntegratorConfig<F: ComplexScalar> {
     /// Whether to store quadrature samples in each returned segment.
     ///
