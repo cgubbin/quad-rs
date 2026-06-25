@@ -136,7 +136,7 @@ where
     ///
     /// Chebyshev coefficients indexed by polynomial degree.
     pub(crate) fn compute_chebyshev_coefficients(m: usize) -> Vec<F> {
-        let half_degree = (m + 1) / 2;
+        let half_degree = m.div_ceil(2);
         let mut alpha = vec![F::zero(); half_degree + 1];
         let mut recurrence_coeffs = vec![F::zero(); half_degree + 1];
         let mut coeffs = vec![F::zero(); m + 2];

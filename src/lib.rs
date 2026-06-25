@@ -27,8 +27,8 @@ pub(crate) use storage::SegmentHeap;
 use nalgebra::ComplexField;
 use std::ops::Range;
 use trellis_runner::{
-    AbsoluteTolerancePolicy, EngineFailure, EngineOutput, GenerateBuilderFallible,
-    RelativeTolerancePolicy, RunSummary, Termination,
+    AbsoluteTolerancePolicy, EngineFailure, GenerateBuilderFallible, RelativeTolerancePolicy,
+    RunSummary, Termination,
 };
 
 pub struct IntegrationResult<I, O, F> {
@@ -52,8 +52,8 @@ impl<I, O, F> IntegrationResult<I, O, F> {
             error: result.error,
             evaluations: result.evaluations,
             refinements: result.refinements,
-            termination: termination,
-            summary: summary,
+            termination,
+            summary,
             samples: result.samples,
         }
     }

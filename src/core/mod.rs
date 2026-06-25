@@ -36,10 +36,9 @@
 //! The scalar error is then rescaled using the QUADPACK-style rescaling
 //! procedure.
 
-use argmin_math::{ArgminAdd, ArgminDiv, ArgminMul, ArgminSub};
+use argmin_math::{ArgminAdd, ArgminMul, ArgminSub};
 use nalgebra::ComplexField;
 use num_traits::{Float, FromPrimitive};
-use std::ops::Range;
 
 mod error;
 mod policy;
@@ -592,10 +591,10 @@ impl<F> GaussKronrod<F> {
     /// 2. For very small errors, the estimate is damped according to
     ///    \f[
     ///    \mathrm{error}
-    ///      \leftarrow
-    ///      \mathrm{result\_asc}
-    ///      \left(\frac{200\,\mathrm{error}}
-    ///                  {\mathrm{result\_asc}}\right)^{3/2},
+    ///    \leftarrow
+    ///    \mathrm{result\_asc}
+    ///    \left(\frac{200\,\mathrm{error}}
+    ///    \mathrm{result\_asc}}\right)^{3/2},
     ///    \f]
     ///    preventing spurious over-accuracy caused by cancellation.
     /// 3. A minimum error proportional to machine precision and `result_abs` is

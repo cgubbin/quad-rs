@@ -83,7 +83,7 @@ impl<C> LineSegment<C> {
         let entry = pole - tangent_offset;
         let exit = pole + tangent_offset;
 
-        let normal_angle_shift = match side {
+        let _normal_angle_shift = match side {
             IndentSide::Left => F::from_f64(std::f64::consts::FRAC_PI_2).unwrap(),
             IndentSide::Right => -F::from_f64(std::f64::consts::FRAC_PI_2).unwrap(),
         };

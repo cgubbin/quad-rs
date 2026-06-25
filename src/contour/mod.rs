@@ -20,16 +20,13 @@ mod piece;
 
 pub use deform::IndentSide;
 
-pub(crate) use piece::{ContourPiece, SplittableContourPiece};
+pub(crate) use piece::ContourPiece;
 
 pub use piece::{CircularArc, ContourSegment, LineSegment};
 
 use crate::integrable::ComplexScalar;
 
-use nalgebra::ComplexField;
-use num_complex::Complex;
-use num_traits::{Float, FromPrimitive};
-use std::ops::Range;
+use num_traits::FromPrimitive;
 
 /// Ordered integration contour.
 ///

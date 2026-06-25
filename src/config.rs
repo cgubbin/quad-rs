@@ -108,6 +108,7 @@ impl<F> IntegratorConfig<F>
 where
     F: Float + FromPrimitive + ComplexScalar,
 {
+    /// Create a new default config
     pub fn new() -> Self {
         Self::default()
     }
@@ -127,6 +128,7 @@ where
         contour
     }
 
+    /// Add an indentation to the contour at the given point
     pub fn with_indentation(mut self, point: F::Complex, radius: F, side: IndentSide) -> Self {
         let deformation = self
             .contour_deformation
@@ -144,6 +146,9 @@ where
         self
     }
 
+    /// Set the tolerance for deformation.
+    ///
+    /// Points within tolerance of the contour will be deformed around
     pub fn with_deformation_tolerance(mut self, tolerance: F) -> Self {
         let deformation = self
             .contour_deformation
@@ -156,46 +161,55 @@ where
         self
     }
 
+    /// Whether to retain samples
     pub fn store_segment_data(mut self) -> Self {
         self.store_segment_data = true;
         self
     }
 
+    /// Set the quadrature order for integration
     pub fn with_integrator_order(mut self, order: usize) -> Self {
         self.integrator_order = order;
         self
     }
 
+    /// Set the minimum permitted segment width
     pub fn with_minimum_segment_width(mut self, width: F) -> Self {
         self.minimum_segment_width = width;
         self
     }
 
+    /// Set the method for error norm reduction for non-scalar outputs
     pub fn with_error_norm(mut self, norm: ErrorNorm) -> Self {
         self.error_norm = norm;
         self
     }
 
+    /// Set the maximum number of function evaluations permitted
     pub fn with_max_function_evalutions(mut self, max_function_evaluations: usize) -> Self {
         self.max_function_evaluations = max_function_evaluations;
         self
     }
 
+    /// Set the method of singularity handling
     pub fn with_singularity_handling(mut self, handling: SingularityHandling) -> Self {
         self.singularity_handling = handling;
         self
     }
 
+    /// Set the relative tolerance at convergence
     pub fn with_relative_tolerance(mut self, tolerance: F) -> Self {
         self.relative_tolerance = tolerance;
         self
     }
 
+    /// Set the absolute tolerance at convergence
     pub fn with_absolute_tolerance(mut self, tolerance: F) -> Self {
         self.absolute_tolerance = tolerance;
         self
     }
 
+    /// Set the number of consecutive good samples required for convergence
     pub fn with_tolerance_window(mut self, window: usize) -> Self {
         self.tolerance_window = window;
         self

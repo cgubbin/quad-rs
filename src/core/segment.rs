@@ -1,7 +1,5 @@
-use nalgebra::ComplexField;
-use num_traits::Float;
 
-use crate::{ContourPiece, IntegrationOutput};
+use crate::ContourPiece;
 
 /// Result of applying an integration rule to one interval.
 ///

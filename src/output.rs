@@ -28,19 +28,14 @@ use crate::IntegrableFloat;
 ///
 /// For vector, matrix, or array outputs, this determines how local integration
 /// error is converted to the scalar value used by the adaptive controller.
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Default)]
 pub enum ErrorNorm {
     /// Use the arithmetic mean of component magnitudes.
     Mean,
 
     /// Use the largest component magnitude.
+    #[default]
     Max,
-}
-
-impl Default for ErrorNorm {
-    fn default() -> Self {
-        Self::Max
-    }
 }
 
 /// Type that can be used as an integrand output.

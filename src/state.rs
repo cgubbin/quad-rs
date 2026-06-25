@@ -131,17 +131,13 @@ where
     }
 
     pub(crate) fn summary(&self) -> Option<IntegrationSummary<P::Input, O, F>> {
-        let integral = self.integral();
-        if integral.is_none() {
-            return None;
-        }
+        let integral = self.integral()?;
 
         Some(IntegrationSummary {
-            integral: integral.unwrap(),
+            integral,
             error: self.error(),
             refinements: self.refinements,
             evaluations: self.evaluations,
-            // TODO: Samples should cascade from the segment heap if stored
             samples: todo!(),
         })
     }

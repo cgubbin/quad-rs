@@ -19,7 +19,6 @@
 //! are complex-valued pieces.
 
 use nalgebra::ComplexField;
-use num_complex::Complex;
 use num_traits::Float;
 use std::ops::Range;
 

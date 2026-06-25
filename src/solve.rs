@@ -38,15 +38,14 @@
 use crate::{
     ComplexScalar, Contour, ContourPiece, ContourSegment, Integrable, IntegrableFloat,
     IntegrationState, IntegrationSummary, IntegratorConfig, LineSegment,
-    core::{GaussKronrod, IntegratorError, QuadratureSamples},
+    core::{GaussKronrod, IntegratorError},
 };
 
 use nalgebra::ComplexField;
 use num_traits::{Float, FromPrimitive};
 use std::ops::{AddAssign, SubAssign};
 use trellis_runner::{
-    AbsoluteTolerancePolicy, CancellationGuard, FallibleProcedure, GenerateBuilderFallible,
-    RelativeTolerancePolicy, RunSummary, Termination,
+    CancellationGuard, FallibleProcedure,
 };
 
 /// Adaptive Gauss–Kronrod integrator.
@@ -192,7 +191,7 @@ where
 
     fn finalise_fallible(
         &self,
-        problem: &mut P,
+        _problem: &mut P,
         state: &Self::State,
     ) -> Result<Self::Output, Self::Error> {
         state.summary().ok_or(IntegratorError::NoSegments)
