@@ -47,13 +47,47 @@ mod poly;
 mod pre;
 mod segment;
 
-use policy::SingularityHandling;
-use segment::QuadratureSamples;
+pub use policy::SingularityHandling;
+pub use segment::QuadratureSamples;
 pub(crate) use segment::Segment;
 
 pub(crate) use error::IntegratorError;
 
-use crate::{ErrorNorm, Integrable, IntegrableFloat, IntegrationOutput};
+use crate::{ErrorNorm, Integrable, IntegrationOutput};
+
+pub(crate) struct GaussKronrodConfig<F> {
+    order: usize,
+    minimum_segment_width: F,
+    error_norm: ErrorNorm,
+    singularity_handling: SingularityHandling,
+}
+
+impl<F: FromPrimitive> Default for GaussKronrodConfig<F> {
+    fn default() -> Self {
+        Self {
+            order: 10,
+            minimum_segment_width: F::from_f64(1e-8).unwrap(),
+            error_norm: ErrorNorm::Max,
+            singularity_handling: SingularityHandling::default(),
+        }
+    }
+}
+
+impl<F> GaussKronrodConfig<F> {
+    pub(crate) fn new(
+        order: usize,
+        minimum_segment_width: F,
+        error_norm: ErrorNorm,
+        singularity_handling: SingularityHandling,
+    ) -> Self {
+        Self {
+            order,
+            minimum_segment_width,
+            error_norm,
+            singularity_handling,
+        }
+    }
+}
 
 /// A Gauss-Kronrod Integrator
 #[derive(Debug)]
@@ -72,12 +106,6 @@ pub struct GaussKronrod<F> {
     pub wg: Vec<F>,
     /// The Gauss-Kronrod weights, a vec of length m + 1
     pub wgk: Vec<F>,
-    /// The target relative tolerance for the integration error
-    relative_tolerance: F,
-    /// The target absolute tolerance for integration error
-    absolute_tolerance: F,
-    /// The maximum allowed number of function evaluations before termination
-    maximum_number_of_function_evaluations: usize,
     /// The minimum width of a segment (normalised to range -1->1) before it is
     /// assumed to host a singularity
     minimum_segment_width: F,
@@ -92,7 +120,8 @@ impl<F: FromPrimitive> Default for GaussKronrod<F> {
     /// 10 and Gauss-Kronrod order 21. It uses precomputed values for the
     /// abscissa and weights, saving the initial build time
     fn default() -> Self {
-        let m = 10;
+        let config = GaussKronrodConfig::default();
+        let m = config.order;
         let n = m + 1;
 
         Self {
@@ -110,12 +139,9 @@ impl<F: FromPrimitive> Default for GaussKronrod<F> {
                 .into_iter()
                 .map(|val| F::from_f64(val).unwrap())
                 .collect::<Vec<_>>(),
-            relative_tolerance: F::from_f64(1.49e-08).unwrap(),
-            absolute_tolerance: F::from_f64(1.49e-08).unwrap(),
-            maximum_number_of_function_evaluations: 5000,
-            minimum_segment_width: F::from_f64(1e-8).unwrap(),
-            error_norm: ErrorNorm::Max,
-            singularity_handling: SingularityHandling::default(),
+            minimum_segment_width: config.minimum_segment_width,
+            error_norm: config.error_norm,
+            singularity_handling: config.singularity_handling,
         }
     }
 }
@@ -125,31 +151,47 @@ where
     F: Float + FromPrimitive + std::ops::SubAssign + std::ops::AddAssign,
 {
     /// Create a new Gauss-Kronrod integrator of order m
-    pub fn new(m: usize) -> Self {
-        // If the default is called for, return that
-        if m == 10 {
-            return Self::default();
-        }
-
+    pub fn new(config: GaussKronrodConfig<F>) -> Self {
+        let m = config.order;
         let n = m + 1;
 
-        let zeros = Self::compute_legendre_zeros(m);
-        let coeffs = Self::compute_chebyshev_coefficients(m);
-        let abscissae = Self::compute_gauss_kronrod_abscissae(m, &coeffs, &zeros);
-        let weights = Self::compute_gauss_kronrod_weights(&abscissae, &coeffs);
+        // If m = 10 use the precomputed weights, else generate
+        if m == 10 {
+            Self {
+                m,
+                n,
+                xgk: pre::XGK_10_F64
+                    .into_iter()
+                    .map(|val| F::from_f64(val).unwrap())
+                    .collect::<Vec<_>>(),
+                wg: pre::WG_10_F64
+                    .into_iter()
+                    .map(|val| F::from_f64(val).unwrap())
+                    .collect::<Vec<_>>(),
+                wgk: pre::WGK_10_F64
+                    .into_iter()
+                    .map(|val| F::from_f64(val).unwrap())
+                    .collect::<Vec<_>>(),
+                minimum_segment_width: config.minimum_segment_width,
+                error_norm: config.error_norm,
+                singularity_handling: config.singularity_handling,
+            }
+        } else {
+            let zeros = Self::compute_legendre_zeros(m);
+            let coeffs = Self::compute_chebyshev_coefficients(m);
+            let abscissae = Self::compute_gauss_kronrod_abscissae(m, &coeffs, &zeros);
+            let weights = Self::compute_gauss_kronrod_weights(&abscissae, &coeffs);
 
-        Self {
-            m,
-            n,
-            xgk: abscissae,
-            wg: weights.gauss,
-            wgk: weights.gauss_kronrod,
-            relative_tolerance: F::from_f64(1.49e-08).unwrap(),
-            absolute_tolerance: F::from_f64(1.49e-08).unwrap(),
-            maximum_number_of_function_evaluations: 5000,
-            minimum_segment_width: F::from_f64(1e-8).unwrap(),
-            error_norm: ErrorNorm::Max,
-            singularity_handling: SingularityHandling::default(),
+            Self {
+                m,
+                n,
+                xgk: abscissae,
+                wg: weights.gauss,
+                wgk: weights.gauss_kronrod,
+                minimum_segment_width: config.minimum_segment_width,
+                error_norm: config.error_norm,
+                singularity_handling: config.singularity_handling,
+            }
         }
     }
 }
@@ -339,7 +381,6 @@ impl<F> GaussKronrod<F> {
         // Map the reference interval [-1, 1] to the requested segment.
         let center = (range.end + range.start) / two;
         let half_length = (range.end - range.start) / two;
-        let abs_half_length = half_length.modulus();
 
         let f_center = integrand.checked_integrand(&center)?;
 
@@ -419,8 +460,6 @@ impl<F> GaussKronrod<F> {
         let error = Self::rescale_error(raw_error, result_abs, result_asc);
 
         let result = result_kronrod.mul(&half_length);
-        let result_abs = result_abs.mul(abs_half_length);
-        let result_asc = result_asc.mul(abs_half_length);
 
         Ok(Segment {
             range,
@@ -451,12 +490,12 @@ impl<F> GaussKronrod<F> {
     ///
     /// This method is used by the adaptive loop after selecting the segment with
     /// the largest local error estimate.
-    fn bisect_segment<Y>(
+    pub(crate) fn refine_segment<Y>(
         &self,
         integrand: &Y,
         segment: Segment<Y::Input, Y::Output, F>,
         store_segment_samples: bool,
-    ) -> Result<[Segment<Y::Input, Y::Output, F>; 2], IntegratorError<Y::Input>>
+    ) -> Result<Vec<Segment<Y::Input, Y::Output, F>>, IntegratorError<Y::Input>>
     where
         F: Float + FromPrimitive,
         Y: Integrable<Float = F>,
@@ -467,10 +506,12 @@ impl<F> GaussKronrod<F> {
         let left_range = segment.range.start..midpoint;
         let right_range = midpoint..segment.range.end;
 
-        let left = self.integrate_segment(integrand, left_range, store_segment_samples)?;
-        let right = self.integrate_segment(integrand, right_range, store_segment_samples)?;
+        let left =
+            self.integrate_segment_with_policy(integrand, left_range, store_segment_samples)?;
+        let right =
+            self.integrate_segment_with_policy(integrand, right_range, store_segment_samples)?;
 
-        Ok([left, right])
+        Ok(left.into_iter().chain(right).collect())
     }
 
     /// Rescales the raw Gauss–Kronrod error estimate using the QUADPACK strategy.
@@ -561,7 +602,6 @@ impl<F> GaussKronrod<F> {
 mod integrate_segment_tests {
     use super::*;
     use nalgebra::Complex;
-    use std::ops::Range;
 
     const TOL: f64 = 1e-10;
 
@@ -717,13 +757,18 @@ mod integrate_segment_tests {
     }
 
     #[test]
-    fn bisect_segment_splits_range_at_midpoint() {
+    fn refine_segment_splits_range_at_midpoint_for_simple_integrand() {
         let gk = GaussKronrod::<f64>::default();
         let f = RealFn(|x: &f64| *x);
 
         let original = gk.integrate_segment(&f, 0.0..4.0, false).unwrap();
 
-        let [left, right] = gk.bisect_segment(&f, original, false).unwrap();
+        let segments = gk.refine_segment(&f, original, false).unwrap();
+
+        assert_eq!(segments.len(), 2);
+
+        let left = &segments[0];
+        let right = &segments[1];
 
         assert_close(left.range.start, 0.0);
         assert_close(left.range.end, 2.0);
@@ -733,25 +778,33 @@ mod integrate_segment_tests {
     }
 
     #[test]
-    fn bisect_segment_preserves_integral_sum_for_polynomial() {
+    fn refine_segment_preserves_integral_sum_for_polynomial() {
         let gk = GaussKronrod::<f64>::default();
         let f = RealFn(|x: &f64| x * x + 2.0 * x + 1.0);
 
         let original = gk.integrate_segment(&f, -1.0..3.0, false).unwrap();
 
-        let [left, right] = gk.bisect_segment(&f, original.clone(), false).unwrap();
+        let segments = gk.refine_segment(&f, original.clone(), false).unwrap();
 
-        assert_close(left.result + right.result, original.result);
+        assert_close(
+            segments.iter().map(|each| each.result).sum(),
+            original.result,
+        );
     }
 
     #[test]
-    fn bisect_segment_returns_two_non_empty_segments() {
+    fn refine_segment_returns_two_non_empty_segments_for_simple_integrand() {
         let gk = GaussKronrod::<f64>::default();
         let f = RealFn(|x: &f64| x.sin());
 
         let original = gk.integrate_segment(&f, -2.0..5.0, false).unwrap();
 
-        let [left, right] = gk.bisect_segment(&f, original, false).unwrap();
+        let segments = gk.refine_segment(&f, original, false).unwrap();
+
+        assert_eq!(segments.len(), 2);
+
+        let left = &segments[0];
+        let right = &segments[1];
 
         assert!(left.range.start != left.range.end);
         assert!(right.range.start != right.range.end);
@@ -759,7 +812,7 @@ mod integrate_segment_tests {
     }
 
     #[test]
-    fn bisect_segment_works_for_complex_contour() {
+    fn refine_segment_works_for_complex_contour() {
         let gk = GaussKronrod::<f64>::default();
         let f = ComplexFn(|z: &Complex<f64>| *z);
 
@@ -768,14 +821,22 @@ mod integrate_segment_tests {
 
         let original = gk.integrate_segment(&f, start..end, false).unwrap();
 
-        let [left, right] = gk.bisect_segment(&f, original.clone(), false).unwrap();
+        let segments = gk.refine_segment(&f, original.clone(), false).unwrap();
+
+        assert_eq!(segments.len(), 2);
+
+        let left = &segments[0];
+        let right = &segments[1];
 
         assert_complex_close(left.range.start, start);
         assert_complex_close(left.range.end, Complex::new(1.0, 1.0));
         assert_complex_close(right.range.start, Complex::new(1.0, 1.0));
         assert_complex_close(right.range.end, end);
 
-        assert_complex_close(left.result + right.result, original.result);
+        assert_complex_close(
+            segments.iter().map(|each| each.result).sum(),
+            original.result,
+        );
     }
 
     #[test]

@@ -37,6 +37,12 @@ pub enum ErrorNorm {
     Max,
 }
 
+impl Default for ErrorNorm {
+    fn default() -> Self {
+        Self::Max
+    }
+}
+
 /// Type that can be used as an integrand output.
 ///
 /// The integrator forms linear combinations of integrand outputs using scalar

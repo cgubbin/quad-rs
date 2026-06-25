@@ -1,4 +1,7 @@
-use crate::{IntegrationOutput, SegmentHeap};
+use crate::{
+    IntegrationOutput, SegmentHeap,
+    core::{IntegratorError, QuadratureSamples, Segment},
+};
 
 use num_traits::Float;
 use trellis_runner::{Progress, ProgressDiagnostics, TrellisFloat, UserState};
@@ -23,9 +26,23 @@ where
 
     /// Number of adaptive segment refinements performed.
     refinements: usize,
+}
 
-    /// Whether quadrature samples are stored in each returned segment.
-    store_segment_data: bool,
+pub(crate) struct IntegrationSummary<I, O, F> {
+    /// The result of the integration
+    pub(crate) integral: O,
+
+    /// Associated Error
+    pub(crate) error: F,
+
+    /// Number of integrand evaluations performed by this algorithm.
+    pub(crate) evaluations: usize,
+
+    /// Number of adaptive segment refinements performed
+    pub(crate) refinements: usize,
+
+    /// If requested the samples seen by the integrator
+    pub(crate) samples: Option<QuadratureSamples<I, O>>,
 }
 
 impl<I, O, F> IntegrationState<I, O, F>
@@ -33,6 +50,48 @@ where
     F: Float,
     O: IntegrationOutput<Float = F>,
 {
+    /// Create a new instance of IntegrationState
+    ///
+    /// Integration states are created with an empty segment heap, and must be initialised
+    pub(crate) fn new() -> Self {
+        Self {
+            segments: SegmentHeap::empty(),
+            evaluations: 0,
+            refinements: 0,
+        }
+    }
+
+    /// Pushes segments into the heap.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`IntegratorError::NonFiniteErrorEstimate`] if the segment error
+    /// is `NaN`.
+    pub fn push_segments(
+        &mut self,
+        segments: Vec<Segment<I, O, F>>,
+    ) -> Result<(), IntegratorError<I>> {
+        for each in segments {
+            self.push(each)?;
+        }
+        Ok(())
+    }
+
+    /// Pushes a segment into the heap.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`IntegratorError::NonFiniteErrorEstimate`] if the segment error
+    /// is `NaN`.
+    pub fn push(&mut self, segment: Segment<I, O, F>) -> Result<(), IntegratorError<I>> {
+        self.segments.push(segment)
+    }
+
+    /// Removes and returns the segment with the largest local error estimate.
+    pub fn pop_worst(&mut self) -> Option<Segment<I, O, F>> {
+        self.segments.pop_worst()
+    }
+
     /// Returns the current global integral estimate.
     ///
     /// This is computed by summing the results of all active segments. Returns
@@ -57,16 +116,28 @@ where
         self.refinements
     }
 
-    pub(crate) fn store_segment_data(&self) -> bool {
-        self.store_segment_data
-    }
-
     pub(crate) fn record_evaluations(&mut self, n: usize) {
         self.evaluations += n;
     }
 
     pub(crate) fn record_refinement(&mut self) {
         self.refinements += 1;
+    }
+
+    pub(crate) fn summary(&self) -> Option<IntegrationSummary<I, O, F>> {
+        let integral = self.integral();
+        if integral.is_none() {
+            return None;
+        }
+
+        Some(IntegrationSummary {
+            integral: integral.unwrap(),
+            error: self.error(),
+            refinements: self.refinements,
+            evaluations: self.evaluations,
+            // TODO: Samples should cascade from the segment heap if stored
+            samples: todo!(),
+        })
     }
 }
 
@@ -84,8 +155,7 @@ where
 
     fn progress(&self) -> Progress<Self::Float> {
         let Some(integral) = self.integral() else {
-            todo!()
-            // return Progress::NoProgress;
+            unreachable!("IntegrationState is always initialised if segments is empty");
         };
 
         let measure = integral.mean_component();

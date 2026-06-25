@@ -1,240 +1,141 @@
-use nalgebra::{ComplexField, RealField};
-use num_traits::FromPrimitive;
-
-use std::ops::Range;
-use trellis_runner::{Calculation, Problem};
-
 use crate::{
-    contour::split_range_around_singularities, AccumulateError, Contour, GaussKronrod,
-    GaussKronrodCore, Integrable, IntegrableFloat, IntegrationError, IntegrationOutput,
-    IntegrationResult, IntegrationState, RescaleError,
+    Integrable, IntegrableFloat, IntegrationState, IntegrationSummary, IntegratorConfig,
+    core::{GaussKronrod, IntegratorError, QuadratureSamples},
 };
 
-#[derive(Debug)]
-pub struct AdaptiveIntegrator<F: ComplexField> {
-    limits: Range<F>,
-    max_elements: usize,
-    minimum_element_size: <F as ComplexField>::RealField,
-    singularities: Vec<F>,
-    integrator: GaussKronrod<<F as ComplexField>::RealField>,
-    relative_tolerance: <F as ComplexField>::RealField,
-    absolute_tolerance: <F as ComplexField>::RealField,
+use num_traits::{Float, FromPrimitive};
+use std::ops::{AddAssign, Range, SubAssign};
+use trellis_runner::{
+    AbsoluteTolerancePolicy, CancellationGuard, FallibleProcedure, GenerateBuilderFallible,
+    RelativeTolerancePolicy, RunSummary, Termination,
+};
+
+pub struct IntegrationResult<I, O, F> {
+    integral: O,
+    error: F,
+    evaluations: usize,
+    refinements: usize,
+    termination: Termination,
+    summary: RunSummary<F>,
+    samples: Option<QuadratureSamples<I, O>>,
 }
 
-impl<F: ComplexField> AdaptiveIntegrator<F> {
-    pub fn new_real(
-        Range { start, end }: Range<<F as ComplexField>::RealField>,
-        max_elements: usize,
-        minimum_element_size: <F as ComplexField>::RealField,
-        singularities: Vec<F>,
-        relative_tolerance: <F as ComplexField>::RealField,
-        absolute_tolerance: <F as ComplexField>::RealField,
-    ) -> Self {
-        Self {
-            limits: Range {
-                start: F::from_real(start),
-                end: F::from_real(end),
-            },
-            max_elements,
-            minimum_element_size,
-            singularities,
-            integrator: GaussKronrod::default(),
-            relative_tolerance,
-            absolute_tolerance,
-        }
-    }
+fn run<P: Integrable>(
+    problem: P,
+    domain: Vec<Range<P::Input>>,
+    known_singularities: Vec<P::Input>,
+    config: IntegratorConfig<P::Float>,
+) -> IntegrationResult<P::Input, P::Output, P::Float>
+where
+    <P as Integrable>::Float: IntegrableFloat,
+{
+    let integrator = Integrator::new(domain, known_singularities, &config);
 
-    pub fn new(
-        limits: Range<F>,
-        max_elements: usize,
-        minimum_element_size: <F as ComplexField>::RealField,
-        singularities: Vec<F>,
-        relative_tolerance: <F as ComplexField>::RealField,
-        absolute_tolerance: <F as ComplexField>::RealField,
-    ) -> Self {
-        Self {
-            limits,
-            max_elements,
-            minimum_element_size,
-            singularities,
-            integrator: GaussKronrod::default(),
-            relative_tolerance,
-            absolute_tolerance,
+    let engine = integrator
+        .build_for(problem)
+        .with_initial_state(IntegrationState::new())
+        .and_policy(AbsoluteTolerancePolicy::new(
+            config.absolute_tolerance,
+            config.tolerance_window,
+        ))
+        .and_policy(RelativeTolerancePolicy::new(
+            config.relative_tolerance,
+            config.tolerance_window,
+        ))
+        .finalise();
+
+    match engine.run() {
+        Err(e) => todo!(),
+        Ok(output) => {
+            let result = IntegrationResult {
+                integral: output.result.integral,
+                error: output.result.error,
+                evaluations: output.result.evaluations,
+                refinements: output.result.refinements,
+                termination: output.termination,
+                summary: output.summary,
+                samples: output.result.samples,
+            };
+
+            result
         }
     }
 }
 
-impl<P> Integrable for Problem<P>
+struct Integrator<I, F> {
+    store_segment_data: bool,
+    domain: Vec<Range<I>>,
+    known_singularities: Vec<I>,
+    inner: GaussKronrod<F>,
+}
+
+impl<I, F> Integrator<I, F> {
+    fn new(domain: Vec<Range<I>>, known_singularities: Vec<I>, config: &IntegratorConfig<F>) -> Self
+    where
+        F: Float + FromPrimitive + SubAssign + AddAssign,
+    {
+        Self {
+            store_segment_data: config.store_segment_data,
+            domain,
+            known_singularities,
+            inner: GaussKronrod::new(config.gk_config()),
+        }
+    }
+}
+
+impl<P> FallibleProcedure<P> for Integrator<P::Input, P::Float>
 where
     P: Integrable,
 {
-    type Input = P::Input;
-    type Output = P::Output;
+    type Output = IntegrationSummary<P::Input, P::Output, P::Float>;
+    type State = IntegrationState<P::Input, P::Output, P::Float>;
+    type Error = IntegratorError<P::Input>;
 
-    fn integrand(
+    const NAME: &'static str = "quadpack integrator";
+
+    fn initialise_fallible(
         &self,
-        input: &Self::Input,
-    ) -> Result<Self::Output, crate::EvaluationError<Self::Input>> {
-        self.as_ref().integrand(input)
-    }
-}
-
-impl<I, O, F, P> Calculation<P, IntegrationState<I, O, F>> for AdaptiveIntegrator<I>
-where
-    P: Integrable<Input = I, Output = O> + Send + Sync,
-    I: ComplexField<RealField = F> + FromPrimitive + Copy,
-    O: IntegrationOutput<Float = F, Scalar = I>,
-    F: IntegrableFloat + RealField + FromPrimitive + AccumulateError<F> + RescaleError,
-{
-    const NAME: &'static str = "Adaptive Integrator";
-    type Error = IntegrationError<I>;
-    type Output = IntegrationResult<I, O>;
-
-    fn initialise(
-        &mut self,
-        problem: &mut Problem<P>,
-        state: IntegrationState<I, O, F>,
-    ) -> Result<IntegrationState<I, O, F>, Self::Error> {
-        let initial_segments = match self.singularities.len() {
-            0 => self
-                .integrator
-                // .gauss_kronrod(|x| problem.integrand(&x).unwrap(), self.limits.clone())
-                .gauss_kronrod(&*problem, self.limits.clone())?,
-            _ => split_range_around_singularities(self.limits.clone(), self.singularities.clone())
-                .into_iter()
-                .map(|range| {
-                    self.integrator
-                        // .gauss_kronrod(|x| problem.integrand(&x).unwrap(), range)
-                        .gauss_kronrod(&*problem, range)
-                })
-                .collect::<Result<Vec<_>, _>>()?
-                .into_iter()
-                .flatten()
-                .collect(),
-        };
-
-        Ok(state.segments(initial_segments))
-    }
-
-    fn next(
-        &mut self,
-        problem: &mut Problem<P>,
-        mut state: IntegrationState<I, O, F>,
-    ) -> Result<IntegrationState<I, O, F>, Self::Error> {
-        let worst_segment = state.pop_worst_segment().unwrap();
-        let new_segments = self.integrator.split_segment(&*problem, worst_segment)?;
-        Ok(state.segments(new_segments))
-    }
-
-    fn finalise(
-        &mut self,
-        _problem: &mut Problem<P>,
-        state: IntegrationState<I, O, F>,
-    ) -> Result<Self::Output, Self::Error> {
-        Ok(state.into())
-    }
-}
-
-#[derive(Debug)]
-pub struct AdaptiveRectangularContourIntegrator<F: ComplexField> {
-    pub(crate) contour: Contour<F>,
-    pub(crate) max_elements: usize,
-    pub(crate) minimum_element_size: <F as ComplexField>::RealField,
-    pub(crate) integrator: GaussKronrod<<F as ComplexField>::RealField>,
-    pub(crate) relative_tolerance: <F as ComplexField>::RealField,
-    pub(crate) absolute_tolerance: <F as ComplexField>::RealField,
-}
-
-impl<F> AdaptiveRectangularContourIntegrator<F>
-where
-    F: ComplexField + Copy,
-    <F as ComplexField>::RealField: Copy,
-{
-    pub fn new(
-        contour: Contour<F>,
-        max_elements: usize,
-        minimum_element_size: <F as ComplexField>::RealField,
-        relative_tolerance: <F as ComplexField>::RealField,
-        absolute_tolerance: <F as ComplexField>::RealField,
-    ) -> Self {
-        Self {
-            contour,
-            max_elements,
-            minimum_element_size,
-            integrator: GaussKronrod::default(),
-            relative_tolerance,
-            absolute_tolerance,
+        problem: &mut P,
+        state: &mut Self::State,
+    ) -> Result<(), Self::Error> {
+        // TODO: Singularity handling. Domains should be automatically split on known
+        // singularities.
+        // How to make this robust for complex arguments?
+        for domain in &self.domain {
+            let segments = self.inner.integrate_segment_with_policy(
+                problem,
+                domain.clone(),
+                self.store_segment_data,
+            )?;
+            state.push_segments(segments);
         }
-    }
-    pub fn initialise<I: Into<Contour<F>>>(
-        input: I,
-        max_elements: usize,
-        minimum_element_size: <F as ComplexField>::RealField,
-        relative_tolerance: <F as ComplexField>::RealField,
-        absolute_tolerance: <F as ComplexField>::RealField,
-    ) -> Self {
-        Self {
-            contour: input.into(),
-            max_elements,
-            minimum_element_size,
-            integrator: GaussKronrod::default(),
-            relative_tolerance,
-            absolute_tolerance,
-        }
-    }
-}
-
-impl<I, O, F, P> Calculation<P, IntegrationState<I, O, F>>
-    for AdaptiveRectangularContourIntegrator<I>
-where
-    P: Integrable<Input = I, Output = O> + Send + Sync,
-    I: ComplexField<RealField = F> + FromPrimitive + Copy,
-    O: IntegrationOutput<Float = F, Scalar = I>,
-    F: IntegrableFloat + RealField + FromPrimitive + AccumulateError<F> + RescaleError,
-{
-    const NAME: &'static str = "Adaptive Contour Integrator";
-    type Error = IntegrationError<I>;
-    type Output = IntegrationResult<I, O>;
-
-    fn initialise(
-        &mut self,
-        problem: &mut Problem<P>,
-        state: IntegrationState<I, O, F>,
-    ) -> Result<IntegrationState<I, O, F>, Self::Error> {
-        let initial_segments = self
-            .contour
-            .range
-            .iter()
-            .map(|range| {
-                self.integrator
-                    // .gauss_kronrod(|x| problem.integrand(&x).unwrap(), range.clone())
-                    .gauss_kronrod(&*problem, range.clone())
-            })
-            .collect::<Result<Vec<_>, _>>()?
-            .into_iter()
-            .flatten()
-            .collect();
-        Ok(state.segments(initial_segments))
+        Ok(())
     }
 
-    fn next(
-        &mut self,
-        problem: &mut Problem<P>,
-        mut state: IntegrationState<I, O, F>,
-    ) -> Result<IntegrationState<I, O, F>, Self::Error> {
-        let worst_segment = state.pop_worst_segment().unwrap();
-        let new_segments = self
-            .integrator
-            // .split_segment(|x| problem.integrand(&x).unwrap(), worst_segment)
-            .split_segment(&*problem, worst_segment)?;
-        Ok(state.segments(new_segments))
+    fn step_fallible(
+        &self,
+        problem: &mut P,
+        state: &mut Self::State,
+        _guard: CancellationGuard<'_>,
+    ) -> Result<(), Self::Error> {
+        let worst_segment = state.pop_worst().ok_or(IntegratorError::NoSegments)?;
+
+        let new_segments =
+            self.inner
+                .refine_segment(problem, worst_segment, self.store_segment_data)?;
+
+        state.push_segments(new_segments)?;
+
+        Ok(())
     }
 
-    fn finalise(
-        &mut self,
-        _problem: &mut Problem<P>,
-        state: IntegrationState<I, O, F>,
+    fn finalise_fallible(
+        &self,
+        problem: &mut P,
+        state: &Self::State,
     ) -> Result<Self::Output, Self::Error> {
-        Ok(state.into())
+        let summary = state.summary();
+
+        Ok(summary.unwrap()) // The integration has run so at least one segment has been evaluated
     }
 }

@@ -3,6 +3,8 @@
 pub enum IntegratorError<T> {
     #[error("non-finite error estimate")]
     NonFiniteErrorEstimate,
+    #[error("no segments found")]
+    NoSegments,
     #[error("empty integration segment")]
     EmptySegment,
     #[error("non-finite integrand at {point:?}")]

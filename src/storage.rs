@@ -35,7 +35,7 @@
 //! This ensures that the segment contributing the largest estimated error is
 //! always returned first.
 use crate::{
-    IntegrableFloat, IntegrationOutput,
+    IntegrationOutput,
     core::{IntegratorError, Segment},
 };
 

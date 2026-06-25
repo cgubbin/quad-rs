@@ -185,9 +185,6 @@ where
     ///
     /// The positive-half interlaced Gauss--Kronrod abscissae.
     pub(crate) fn compute_gauss_kronrod_abscissae(m: usize, coeffs: &[F], zeros: &[F]) -> Vec<F> {
-        let two = F::from_usize(2).unwrap();
-        let tol: F = Self::newton_tol();
-
         let n = m + 1;
         let mut abscissae = vec![F::zero(); n];
         let mut bracketed_zeros = vec![F::zero(); zeros.len() + 2];

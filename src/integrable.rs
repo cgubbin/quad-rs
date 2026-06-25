@@ -33,7 +33,8 @@
 use crate::{IntegrationOutput, core::IntegratorError};
 
 use nalgebra::ComplexField;
-use num_traits::Float;
+use num_traits::{Float, FromPrimitive};
+use std::ops::{AddAssign, SubAssign};
 use trellis_runner::TrellisFloat;
 
 /// Function-like object that can be numerically integrated.
@@ -132,7 +133,10 @@ pub trait Integrable {
 ///
 /// - `f32`
 /// - `f64`
-pub trait IntegrableFloat: Float + TrellisFloat {}
+pub trait IntegrableFloat:
+    Float + FromPrimitive + AddAssign + SubAssign + TrellisFloat + Send + Sync + 'static
+{
+}
 
 impl IntegrableFloat for f32 {}
 impl IntegrableFloat for f64 {}
