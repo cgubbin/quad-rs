@@ -1,5 +1,5 @@
 use crate::{
-    IntegrationOutput, SegmentHeap,
+    ContourPiece, IntegrationOutput, SegmentHeap,
     core::{IntegratorError, QuadratureSamples, Segment},
 };
 
@@ -14,12 +14,13 @@ use trellis_runner::{Progress, ProgressDiagnostics, TrellisFloat, UserState};
 /// segments, which remain the single source of truth.
 #[derive(Clone, Default, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub(crate) struct IntegrationState<I, O, F>
+pub(crate) struct IntegrationState<P, O, F>
 where
     F: PartialOrd + PartialEq,
+    P: ContourPiece<Float = F>,
 {
     /// Active integration segments ordered by local error estimate.
-    segments: SegmentHeap<I, O, F>,
+    segments: SegmentHeap<P, O, F>,
 
     /// Number of integrand evaluations performed by this algorithm.
     evaluations: usize,
@@ -45,10 +46,11 @@ pub(crate) struct IntegrationSummary<I, O, F> {
     pub(crate) samples: Option<QuadratureSamples<I, O>>,
 }
 
-impl<I, O, F> IntegrationState<I, O, F>
+impl<P, O, F> IntegrationState<P, O, F>
 where
     F: Float,
     O: IntegrationOutput<Float = F>,
+    P: ContourPiece<Float = F>,
 {
     /// Create a new instance of IntegrationState
     ///
@@ -69,8 +71,8 @@ where
     /// is `NaN`.
     pub fn push_segments(
         &mut self,
-        segments: Vec<Segment<I, O, F>>,
-    ) -> Result<(), IntegratorError<I>> {
+        segments: Vec<Segment<P, O, F>>,
+    ) -> Result<(), IntegratorError<P::Input>> {
         for each in segments {
             self.push(each)?;
         }
@@ -83,12 +85,12 @@ where
     ///
     /// Returns [`IntegratorError::NonFiniteErrorEstimate`] if the segment error
     /// is `NaN`.
-    pub fn push(&mut self, segment: Segment<I, O, F>) -> Result<(), IntegratorError<I>> {
+    pub fn push(&mut self, segment: Segment<P, O, F>) -> Result<(), IntegratorError<P::Input>> {
         self.segments.push(segment)
     }
 
     /// Removes and returns the segment with the largest local error estimate.
-    pub fn pop_worst(&mut self) -> Option<Segment<I, O, F>> {
+    pub fn pop_worst(&mut self) -> Option<Segment<P, O, F>> {
         self.segments.pop_worst()
     }
 
@@ -108,11 +110,11 @@ where
         self.segments.error()
     }
 
-    pub(crate) fn evaluations(self) -> usize {
+    pub(crate) fn evaluations(&self) -> usize {
         self.evaluations
     }
 
-    pub(crate) fn refinements(self) -> usize {
+    pub(crate) fn refinements(&self) -> usize {
         self.refinements
     }
 
@@ -124,7 +126,11 @@ where
         self.refinements += 1;
     }
 
-    pub(crate) fn summary(&self) -> Option<IntegrationSummary<I, O, F>> {
+    pub(crate) fn record_refinements(&mut self, n: usize) {
+        self.refinements += n;
+    }
+
+    pub(crate) fn summary(&self) -> Option<IntegrationSummary<P::Input, O, F>> {
         let integral = self.integral();
         if integral.is_none() {
             return None;
@@ -141,10 +147,11 @@ where
     }
 }
 
-impl<I, O, F> UserState for IntegrationState<I, O, F>
+impl<P, O, F> UserState for IntegrationState<P, O, F>
 where
     F: Float + TrellisFloat,
     O: IntegrationOutput<Float = F>,
+    P: ContourPiece<Float = F>,
 {
     type Float = F;
     // type Param;

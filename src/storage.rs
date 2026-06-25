@@ -35,7 +35,7 @@
 //! This ensures that the segment contributing the largest estimated error is
 //! always returned first.
 use crate::{
-    IntegrationOutput,
+    ContourPiece, IntegrationOutput,
     core::{IntegratorError, Segment},
 };
 
@@ -76,17 +76,19 @@ use std::collections::BinaryHeap;
 /// ordering is purely determined by adaptive refinement priority.
 #[derive(Clone, Default, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct SegmentHeap<I, O, F>
+pub struct SegmentHeap<P, O, F>
 where
     F: PartialEq + PartialOrd,
+    P: ContourPiece<Float = F>,
 {
-    inner: BinaryHeap<HeapEntry<I, O, F>>,
+    inner: BinaryHeap<HeapEntry<P, O, F>>,
     next_order: usize,
 }
 
-impl<I, O, F> SegmentHeap<I, O, F>
+impl<P, O, F> SegmentHeap<P, O, F>
 where
     F: Float,
+    P: ContourPiece<Float = F>,
 {
     /// Creates an empty segment heap.
     pub fn new() -> Self {
@@ -117,7 +119,7 @@ where
     ///
     /// The iteration order is the internal heap order and should not be relied
     /// upon for input-domain ordering.
-    pub fn iter(&self) -> impl Iterator<Item = &Segment<I, O, F>> {
+    pub fn iter(&self) -> impl Iterator<Item = &Segment<P, O, F>> {
         self.inner.iter().map(|entry| &entry.segment)
     }
 
@@ -130,7 +132,7 @@ where
     ///
     /// Returns [`IntegratorError::NonFiniteErrorEstimate`] if the segment error
     /// is `NaN`.
-    pub fn push(&mut self, segment: Segment<I, O, F>) -> Result<(), IntegratorError<I>> {
+    pub fn push(&mut self, segment: Segment<P, O, F>) -> Result<(), IntegratorError<P::Input>> {
         let error =
             NotNan::new(segment.error).map_err(|_| IntegratorError::NonFiniteErrorEstimate)?;
 
@@ -147,7 +149,7 @@ where
     }
 
     /// Removes and returns the segment with the largest local error estimate.
-    pub fn pop_worst(&mut self) -> Option<Segment<I, O, F>> {
+    pub fn pop_worst(&mut self) -> Option<Segment<P, O, F>> {
         self.inner.pop().map(|entry| entry.segment)
     }
 
@@ -157,7 +159,7 @@ where
     /// segmented domain. For complex contours, insertion order is usually a
     /// better proxy for path order than sorting by the real component of the
     /// input.
-    pub fn into_insertion_ordered(self) -> Vec<Segment<I, O, F>> {
+    pub fn into_insertion_ordered(self) -> Vec<Segment<P, O, F>> {
         let mut entries = self.inner.into_vec();
 
         entries.sort_by_key(|entry| entry.order);
@@ -166,10 +168,11 @@ where
     }
 }
 
-impl<I, O, F> SegmentHeap<I, O, F>
+impl<P, O, F> SegmentHeap<P, O, F>
 where
     F: Float,
     O: IntegrationOutput<Float = F>,
+    P: ContourPiece<Float = F>,
 {
     /// Returns the sum of all local segment error estimates.
     pub fn error(&self) -> F {
@@ -206,15 +209,19 @@ where
 /// as greater and will be removed first.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-struct HeapEntry<I, O, F> {
+struct HeapEntry<P, O, F>
+where
+    P: ContourPiece<Float = F>,
+{
     error: NotNan<F>,
     order: usize,
-    segment: Segment<I, O, F>,
+    segment: Segment<P, O, F>,
 }
 
-impl<I, O, F> Ord for HeapEntry<I, O, F>
+impl<P, O, F> Ord for HeapEntry<P, O, F>
 where
     F: Float,
+    P: ContourPiece<Float = F>,
 {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.error
@@ -224,33 +231,41 @@ where
     }
 }
 
-impl<I, O, F> PartialOrd for HeapEntry<I, O, F>
+impl<P, O, F> PartialOrd for HeapEntry<P, O, F>
 where
     F: Float,
+    P: ContourPiece<Float = F>,
 {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<I, O, F> PartialEq for HeapEntry<I, O, F>
+impl<P, O, F> PartialEq for HeapEntry<P, O, F>
 where
     F: Float,
+    P: ContourPiece<Float = F>,
 {
     fn eq(&self, other: &Self) -> bool {
         (self.error == other.error) && (self.order == other.order)
     }
 }
 
-impl<I, O, F> Eq for HeapEntry<I, O, F> where F: Float {}
+impl<P, O, F> Eq for HeapEntry<P, O, F>
+where
+    F: Float,
+    P: ContourPiece<Float = F>,
+{
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::LineSegment;
 
-    fn segment(error: f64, result: f64) -> Segment<f64, f64, f64> {
+    fn segment(error: f64, result: f64) -> Segment<LineSegment<f64>, f64, f64> {
         Segment {
-            range: 0.0..1.0,
+            piece: LineSegment::from(0.0..1.0),
             result,
             error,
             samples: None,
@@ -259,7 +274,7 @@ mod tests {
 
     #[test]
     fn new_heap_is_empty() {
-        let heap = SegmentHeap::<f64, f64, f64>::new();
+        let heap = SegmentHeap::<LineSegment<f64>, f64, f64>::new();
 
         assert!(heap.is_empty());
         assert_eq!(heap.len(), 0);
@@ -269,7 +284,7 @@ mod tests {
 
     #[test]
     fn pop_worst_returns_largest_error_first() {
-        let mut heap = SegmentHeap::<f64, f64, f64>::new();
+        let mut heap = SegmentHeap::<LineSegment<f64>, f64, f64>::new();
 
         heap.push(segment(1.0, 10.0)).unwrap();
         heap.push(segment(5.0, 50.0)).unwrap();
@@ -283,7 +298,7 @@ mod tests {
 
     #[test]
     fn equal_errors_pop_in_insertion_order() {
-        let mut heap = SegmentHeap::<f64, f64, f64>::new();
+        let mut heap = SegmentHeap::<LineSegment<f64>, f64, f64>::new();
 
         heap.push(segment(1.0, 10.0)).unwrap();
         heap.push(segment(1.0, 20.0)).unwrap();
@@ -296,7 +311,7 @@ mod tests {
 
     #[test]
     fn push_rejects_nan_error() {
-        let mut heap = SegmentHeap::<f64, f64, f64>::new();
+        let mut heap = SegmentHeap::<LineSegment<f64>, f64, f64>::new();
 
         let result = heap.push(segment(f64::NAN, 0.0));
 
@@ -308,7 +323,7 @@ mod tests {
 
     #[test]
     fn error_sums_segment_errors() {
-        let mut heap = SegmentHeap::<f64, f64, f64>::new();
+        let mut heap = SegmentHeap::<LineSegment<f64>, f64, f64>::new();
 
         heap.push(segment(0.1, 1.0)).unwrap();
         heap.push(segment(0.2, 2.0)).unwrap();
@@ -319,7 +334,7 @@ mod tests {
 
     #[test]
     fn result_sums_segment_results() {
-        let mut heap = SegmentHeap::<f64, f64, f64>::new();
+        let mut heap = SegmentHeap::<LineSegment<f64>, f64, f64>::new();
 
         heap.push(segment(0.1, 1.0)).unwrap();
         heap.push(segment(0.2, 2.0)).unwrap();
@@ -330,7 +345,7 @@ mod tests {
 
     #[test]
     fn into_insertion_ordered_returns_original_push_order() {
-        let mut heap = SegmentHeap::<f64, f64, f64>::new();
+        let mut heap = SegmentHeap::<LineSegment<f64>, f64, f64>::new();
 
         heap.push(segment(3.0, 10.0)).unwrap();
         heap.push(segment(1.0, 20.0)).unwrap();

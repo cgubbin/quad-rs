@@ -10,7 +10,7 @@
 //! error estimate, and optionally the quadrature samples used to compute the
 //! estimate.
 //!
-//! The core operation is [`GaussKronrod::integrate_segment`], which applies one
+//! The core operation is [`GaussKronrod::integrate_piece`], which applies one
 //! Gauss–Kronrod rule to a single interval. Adaptive control is built on top of
 //! this by bisecting segments with large error estimates and, optionally,
 //! splitting around non-finite integrand values according to the configured
@@ -48,12 +48,12 @@ mod pre;
 mod segment;
 
 pub use policy::SingularityHandling;
-pub use segment::QuadratureSamples;
 pub(crate) use segment::Segment;
+pub use segment::{QuadratureSample, QuadratureSamples};
 
-pub(crate) use error::IntegratorError;
+pub use error::IntegratorError;
 
-use crate::{ErrorNorm, Integrable, IntegrationOutput};
+use crate::{ContourPiece, ErrorNorm, Integrable, IntegrationOutput};
 
 pub(crate) struct GaussKronrodConfig<F> {
     order: usize,
@@ -194,12 +194,16 @@ where
             }
         }
     }
+
+    pub(crate) fn evaluations_per_segment(&self) -> usize {
+        2 * self.n - 1
+    }
 }
 
 impl<F> GaussKronrod<F> {
     /// Integrates a segment using the configured singularity handling policy.
     ///
-    /// This method wraps [`GaussKronrod::integrate_segment`]. If the configured
+    /// This method wraps [`GaussKronrod::integrate_piece`]. If the configured
     /// [`SingularityHandling`] policy is [`SingularityHandling::Error`], non-finite
     /// integrand values are returned immediately as errors.
     ///
@@ -219,25 +223,26 @@ impl<F> GaussKronrod<F> {
     ///   non-finite integrand value,
     /// - recursive splitting exceeds the configured maximum depth,
     /// - a segment becomes narrower than the configured minimum segment width.
-    pub(crate) fn integrate_segment_with_policy<Y>(
+    pub(crate) fn integrate_piece_with_policy<Y, P>(
         &self,
         integrand: &Y,
-        range: Range<Y::Input>,
+        piece: &P,
         store_segment_data: bool,
-    ) -> Result<Vec<Segment<Y::Input, Y::Output, F>>, IntegratorError<Y::Input>>
+    ) -> Result<Vec<Segment<P, Y::Output, F>>, IntegratorError<Y::Input>>
     where
         F: Float + FromPrimitive,
         Y: Integrable<Float = F>,
+        P: ContourPiece<Input = Y::Input, Float = F>,
     {
         match self.singularity_handling {
             SingularityHandling::Error => self
-                .integrate_segment(integrand, range, store_segment_data)
+                .integrate_piece(integrand, piece, store_segment_data)
                 .map(|segment| vec![segment]),
 
             SingularityHandling::RecursiveSplit { max_depth } => self
-                .integrate_segment_with_singularity_splitting_inner(
+                .integrate_piece_with_singularity_splitting_inner(
                     integrand,
-                    range,
+                    piece,
                     store_segment_data,
                     0,
                     max_depth,
@@ -247,25 +252,26 @@ impl<F> GaussKronrod<F> {
 
     /// Recursive implementation of singularity-aware segment integration.
     ///
-    /// This method is called by [`GaussKronrod::integrate_segment_with_policy`] when
+    /// This method is called by [`GaussKronrod::integrate_piece_with_policy`] when
     /// the active [`SingularityHandling`] policy is recursive splitting. It tracks
     /// recursion depth explicitly and stops once `max_depth` is reached.
     ///
     /// This method should remain private; callers should use
-    /// [`GaussKronrod::integrate_segment_with_policy`] instead.
-    fn integrate_segment_with_singularity_splitting_inner<Y>(
+    /// [`GaussKronrod::integrate_piece_with_policy`] instead.
+    fn integrate_piece_with_singularity_splitting_inner<Y, P>(
         &self,
         integrand: &Y,
-        range: Range<Y::Input>,
+        piece: &P,
         store_segment_data: bool,
         depth: usize,
         max_depth: usize,
-    ) -> Result<Vec<Segment<Y::Input, Y::Output, F>>, IntegratorError<Y::Input>>
+    ) -> Result<Vec<Segment<P, Y::Output, F>>, IntegratorError<Y::Input>>
     where
         F: Float + FromPrimitive,
         Y: Integrable<Float = F>,
+        P: ContourPiece<Input = Y::Input, Float = F>,
     {
-        match self.integrate_segment(integrand, range.clone(), store_segment_data) {
+        match self.integrate_piece(integrand, piece, store_segment_data) {
             Ok(segment) => Ok(vec![segment]),
 
             Err(IntegratorError::NonFiniteIntegrand { point }) => {
@@ -273,34 +279,30 @@ impl<F> GaussKronrod<F> {
                     return Err(IntegratorError::PossibleSingularity { singularity: point });
                 }
 
-                if (range.end - range.start).modulus() <= self.minimum_segment_width {
+                if piece.length_scale() <= self.minimum_segment_width {
                     return Err(IntegratorError::PossibleSingularity { singularity: point });
                 }
 
-                let [left_range, right_range] = self.singularity_handling.split_range(
-                    range,
-                    point,
-                    self.minimum_segment_width,
-                )?;
+                let [first_piece, second_piece] = piece.split();
 
-                let mut left = self.integrate_segment_with_singularity_splitting_inner(
+                let mut first = self.integrate_piece_with_singularity_splitting_inner(
                     integrand,
-                    left_range,
+                    &first_piece,
                     store_segment_data,
                     depth + 1,
                     max_depth,
                 )?;
 
-                let right = self.integrate_segment_with_singularity_splitting_inner(
+                let second = self.integrate_piece_with_singularity_splitting_inner(
                     integrand,
-                    right_range,
+                    &second_piece,
                     store_segment_data,
                     depth + 1,
                     max_depth,
                 )?;
 
-                left.extend(right);
-                Ok(left)
+                first.extend(second);
+                Ok(first)
             }
 
             Err(error) => Err(error),
@@ -362,46 +364,64 @@ impl<F> GaussKronrod<F> {
     /// For complex ranges, `half_length` is complex. Therefore the final integral
     /// estimate is multiplied by the complex segment half-length, preserving contour
     /// orientation.
-    fn integrate_segment<Y>(
+    pub(crate) fn integrate_piece<Y, P>(
         &self,
         integrand: &Y,
-        range: Range<Y::Input>,
+        piece: &P,
         store_segment_samples: bool,
-    ) -> Result<Segment<Y::Input, Y::Output, F>, IntegratorError<Y::Input>>
+    ) -> Result<Segment<P, Y::Output, F>, IntegratorError<Y::Input>>
     where
         F: Float + FromPrimitive,
         Y: Integrable<Float = F>,
+        P: ContourPiece<Input = Y::Input, Float = F>,
     {
-        if range.start == range.end {
+        if piece.is_degenerate() {
             return Err(IntegratorError::EmptySegment);
         }
 
-        let two = <Y as Integrable>::Input::from_real(F::one() + F::one());
+        let mut left_samples = if store_segment_samples {
+            Some(Vec::with_capacity(self.n - 1))
+        } else {
+            None
+        };
 
-        // Map the reference interval [-1, 1] to the requested segment.
-        let center = (range.end + range.start) / two;
-        let half_length = (range.end - range.start) / two;
+        let mut right_samples = if store_segment_samples {
+            Some(Vec::with_capacity(self.n - 1))
+        } else {
+            None
+        };
 
-        let f_center = integrand.checked_integrand(&center)?;
+        let two_f = F::one() + F::one();
+        let half_f = F::one() / two_f;
+        let half_i = Y::Input::from_real(half_f);
 
-        let wgk = self
-            .wgk
-            .iter()
-            .map(|each| <Y as Integrable>::Input::from_real(*each))
-            .collect::<Vec<_>>();
-        let wg = self
-            .wg
-            .iter()
-            .map(|each| <Y as Integrable>::Input::from_real(*each))
-            .collect::<Vec<_>>();
+        let t_center = half_f;
+        let point_center = piece.point(t_center);
+        let jac_center = piece.derivative(t_center);
+        let f_center = integrand.checked_integrand(&point_center)?;
 
-        let center_weight = wgk[self.n - 1];
+        let center_weight = self.wgk[self.n - 1];
+        let center_weight_i = Y::Input::from_real(center_weight) * half_i;
+        let center_physical_weight = jac_center * center_weight_i;
+        let center_abs_weight = jac_center.modulus() * center_weight * half_f;
 
-        let mut result_kronrod = f_center.mul(&center_weight);
-        let mut result_abs = f_center.modulus().mul(center_weight.real());
+        let centre_sample = if store_segment_samples {
+            Some(QuadratureSample {
+                point: point_center,
+                weight: center_physical_weight,
+                value: f_center.clone(),
+            })
+        } else {
+            None
+        };
+
+        let mut result_kronrod = f_center.mul(&center_physical_weight);
+        let mut result_abs = f_center.modulus() * center_abs_weight;
 
         let mut result_gauss = if self.n % 2 == 0 {
-            Some(f_center.mul(&wg[self.n / 2 - 1]))
+            let gauss_weight = self.wg[self.n / 2 - 1];
+            let physical_weight = jac_center * Y::Input::from_real(gauss_weight * half_f);
+            Some(f_center.mul(&physical_weight))
         } else {
             None
         };
@@ -409,74 +429,105 @@ impl<F> GaussKronrod<F> {
         let mut fv1 = Vec::with_capacity(self.n - 1);
         let mut fv2 = Vec::with_capacity(self.n - 1);
 
-        for j in 0..self.n - 1 {
-            let abscissa = half_length.scale(self.xgk[j]);
+        let mut points_left = Vec::with_capacity(self.n - 1);
+        let mut points_right = Vec::with_capacity(self.n - 1);
+        let mut weights_left = Vec::with_capacity(self.n - 1);
+        let mut weights_right = Vec::with_capacity(self.n - 1);
 
-            let point_left = center - abscissa;
-            let point_right = center + abscissa;
+        for j in 0..self.n - 1 {
+            let t_left = (F::one() - self.xgk[j]) * half_f;
+            let t_right = (F::one() + self.xgk[j]) * half_f;
+
+            let point_left = piece.point(t_left);
+            let point_right = piece.point(t_right);
+
+            let jac_left = piece.derivative(t_left);
+            let jac_right = piece.derivative(t_right);
 
             let f_left = integrand.checked_integrand(&point_left)?;
             let f_right = integrand.checked_integrand(&point_right)?;
 
-            fv1.push(f_left);
-            fv2.push(f_right);
-        }
+            let wk = self.wgk[j];
 
-        for j in 0..self.n - 1 {
-            let fsum = fv1[j].add(&fv2[j]);
+            let weight_left = jac_left * Y::Input::from_real(wk * half_f);
+            let weight_right = jac_right * Y::Input::from_real(wk * half_f);
 
-            result_kronrod = result_kronrod.add(&fsum.mul(&wgk[j]));
+            result_kronrod = result_kronrod
+                .add(&f_left.mul(&weight_left))
+                .add(&f_right.mul(&weight_right));
 
-            result_abs = result_abs.add(fv1[j].modulus().add(fv2[j].modulus()).mul(self.wgk[j]));
+            result_abs = result_abs
+                + f_left.modulus() * jac_left.modulus() * wk * half_f
+                + f_right.modulus() * jac_right.modulus() * wk * half_f;
 
             if j % 2 == 1 {
                 let gauss_idx = j / 2;
-                let contribution = fsum.mul(&wg[gauss_idx]);
+                let wg = self.wg[gauss_idx];
+
+                let gauss_weight_left = jac_left * Y::Input::from_real(wg * half_f);
+                let gauss_weight_right = jac_right * Y::Input::from_real(wg * half_f);
+
+                let contribution = f_left
+                    .mul(&gauss_weight_left)
+                    .add(&f_right.mul(&gauss_weight_right));
 
                 result_gauss = Some(match result_gauss {
                     Some(current) => current.add(&contribution),
                     None => contribution,
                 });
             }
+
+            if let Some(samples) = &mut left_samples {
+                samples.push(QuadratureSample {
+                    point: point_left,
+                    weight: weight_left,
+                    value: f_left.clone(),
+                });
+            }
+
+            if let Some(samples) = &mut right_samples {
+                samples.push(QuadratureSample {
+                    point: point_right,
+                    weight: weight_right,
+                    value: f_right.clone(),
+                });
+            }
+
+            fv1.push(f_left);
+            fv2.push(f_right);
+            points_left.push(point_left);
+            points_right.push(point_right);
+            weights_left.push(weight_left);
+            weights_right.push(weight_right);
         }
 
-        let mean = result_kronrod.div(&two);
+        let mean = result_kronrod.clone();
 
-        let mut result_asc = f_center.sub(&mean).modulus().mul(center_weight.real());
+        let mut result_asc = f_center.sub(&mean).modulus() * center_abs_weight;
 
         for j in 0..self.n - 1 {
-            result_asc = result_asc.add(fv1[j].sub(&mean).modulus().mul(self.wgk[j]));
-
-            result_asc = result_asc.add(fv2[j].sub(&mean).modulus().mul(self.wgk[j]));
+            result_asc = result_asc
+                + fv1[j].sub(&mean).modulus() * weights_left[j].modulus()
+                + fv2[j].sub(&mean).modulus() * weights_right[j].modulus();
         }
 
         let raw_error_output = result_gauss.map_or_else(
-            || result_kronrod.mul(&half_length),
-            |result_gauss| result_kronrod.sub(&result_gauss).mul(&half_length),
+            || result_kronrod.clone(),
+            |result_gauss| result_kronrod.sub(&result_gauss),
         );
 
         let raw_error = raw_error_output.reduce_error(self.error_norm);
-
         let error = Self::rescale_error(raw_error, result_abs, result_asc);
 
-        let result = result_kronrod.mul(&half_length);
-
         Ok(Segment {
-            range,
-            result,
+            piece: piece.clone(),
+            result: result_kronrod,
             error,
-            samples: if store_segment_samples {
-                Some(QuadratureSamples::from_gauss_kronrod_samples(
-                    &fv1,
-                    f_center,
-                    &fv2,
-                    &self.wgk,
-                    center,
-                    half_length,
-                    &self.xgk,
-                ))
-            } else {
-                None
+            samples: match (left_samples, centre_sample, right_samples) {
+                (Some(left), Some(centre), Some(right)) => {
+                    Some(QuadratureSamples::from_parts(left, centre, right))
+                }
+                _ => None,
             },
         })
     }
@@ -490,28 +541,31 @@ impl<F> GaussKronrod<F> {
     ///
     /// This method is used by the adaptive loop after selecting the segment with
     /// the largest local error estimate.
-    pub(crate) fn refine_segment<Y>(
+    pub(crate) fn refine_segment<Y, P>(
         &self,
         integrand: &Y,
-        segment: Segment<Y::Input, Y::Output, F>,
+        segment: Segment<P, Y::Output, F>,
         store_segment_samples: bool,
-    ) -> Result<Vec<Segment<Y::Input, Y::Output, F>>, IntegratorError<Y::Input>>
+    ) -> Result<Vec<Segment<P, Y::Output, F>>, IntegratorError<Y::Input>>
     where
         F: Float + FromPrimitive,
         Y: Integrable<Float = F>,
+        P: ContourPiece<Input = Y::Input, Float = F>,
     {
-        let two = Y::Input::from_real(F::one() + F::one());
-        let midpoint = (segment.range.start + segment.range.end) / two;
+        let [first_piece, second_piece] = segment.piece.split();
 
-        let left_range = segment.range.start..midpoint;
-        let right_range = midpoint..segment.range.end;
+        if (first_piece.length_scale() < self.minimum_segment_width)
+            || (second_piece.length_scale() < self.minimum_segment_width)
+        {
+            return Err(IntegratorError::PieceTooSmall);
+        }
 
-        let left =
-            self.integrate_segment_with_policy(integrand, left_range, store_segment_samples)?;
-        let right =
-            self.integrate_segment_with_policy(integrand, right_range, store_segment_samples)?;
+        let first =
+            self.integrate_piece_with_policy(integrand, &first_piece, store_segment_samples)?;
+        let second =
+            self.integrate_piece_with_policy(integrand, &second_piece, store_segment_samples)?;
 
-        Ok(left.into_iter().chain(right).collect())
+        Ok(first.into_iter().chain(second).collect())
     }
 
     /// Rescales the raw Gauss–Kronrod error estimate using the QUADPACK strategy.
@@ -599,8 +653,9 @@ impl<F> GaussKronrod<F> {
 }
 
 #[cfg(test)]
-mod integrate_segment_tests {
+mod integrate_piece_tests {
     use super::*;
+    use crate::{CircularArc, LineSegment};
     use nalgebra::Complex;
 
     const TOL: f64 = 1e-10;
@@ -653,7 +708,8 @@ mod integrate_segment_tests {
         let gk = GaussKronrod::<f64>::default();
         let f = RealFn(|_: &f64| 3.0);
 
-        let segment = gk.integrate_segment(&f, 2.0..5.0, false).unwrap();
+        let piece: LineSegment<f64> = (2.0..5.0).into();
+        let segment = gk.integrate_piece(&f, &piece, false).unwrap();
 
         assert_close(segment.result, 9.0);
         assert!(segment.error >= 0.0);
@@ -664,8 +720,9 @@ mod integrate_segment_tests {
     fn integrates_linear_function_on_real_interval() {
         let gk = GaussKronrod::<f64>::default();
         let f = RealFn(|x: &f64| 2.0 * x + 1.0);
+        let piece: LineSegment<f64> = (-1.0..3.0).into();
 
-        let segment = gk.integrate_segment(&f, -1.0..3.0, false).unwrap();
+        let segment = gk.integrate_piece(&f, &piece, false).unwrap();
 
         // ∫[-1, 3] (2x + 1) dx = [x² + x] = 12
         assert_close(segment.result, 12.0);
@@ -676,8 +733,9 @@ mod integrate_segment_tests {
     fn integrates_quadratic_function_on_real_interval() {
         let gk = GaussKronrod::<f64>::default();
         let f = RealFn(|x: &f64| x * x);
+        let piece: LineSegment<f64> = (0.0..2.0).into();
 
-        let segment = gk.integrate_segment(&f, 0.0..2.0, false).unwrap();
+        let segment = gk.integrate_piece(&f, &piece, false).unwrap();
 
         assert_close(segment.result, 8.0 / 3.0);
     }
@@ -686,8 +744,9 @@ mod integrate_segment_tests {
     fn rejects_empty_segment() {
         let gk = GaussKronrod::<f64>::default();
         let f = RealFn(|x: &f64| *x);
+        let piece: LineSegment<f64> = (1.0..1.0).into();
 
-        let result = gk.integrate_segment(&f, 1.0..1.0, false);
+        let result = gk.integrate_piece(&f, &piece, false);
 
         assert!(matches!(result, Err(IntegratorError::EmptySegment)));
     }
@@ -696,24 +755,24 @@ mod integrate_segment_tests {
     fn stores_segment_samples_when_requested() {
         let gk = GaussKronrod::<f64>::default();
         let f = RealFn(|x: &f64| x * x);
+        let piece: LineSegment<f64> = (0.0..1.0).into();
 
-        let segment = gk.integrate_segment(&f, 0.0..1.0, true).unwrap();
+        let segment = gk.integrate_piece(&f, &piece, true).unwrap();
 
         let samples = segment.samples.expect("expected segment samples");
 
         let expected_len = 2 * gk.n - 1;
 
-        assert_eq!(samples.points.len(), expected_len);
-        assert_eq!(samples.weights.len(), expected_len);
-        assert_eq!(samples.values.len(), expected_len);
+        assert_eq!(samples.len(), expected_len);
     }
 
     #[test]
     fn omits_segment_samples_when_not_requested() {
         let gk = GaussKronrod::<f64>::default();
         let f = RealFn(|x: &f64| x * x);
+        let piece: LineSegment<f64> = (0.0..1.0).into();
 
-        let segment = gk.integrate_segment(&f, 0.0..1.0, false).unwrap();
+        let segment = gk.integrate_piece(&f, &piece, false).unwrap();
 
         assert!(segment.samples.is_none());
     }
@@ -722,8 +781,9 @@ mod integrate_segment_tests {
     fn reports_non_finite_integrand_as_error() {
         let gk = GaussKronrod::<f64>::default();
         let f = RealFn(|_: &f64| f64::NAN);
+        let piece: LineSegment<f64> = (0.0..1.0).into();
 
-        let result = gk.integrate_segment(&f, 0.0..1.0, false);
+        let result = gk.integrate_piece(&f, &piece, false);
 
         assert!(result.is_err());
     }
@@ -735,8 +795,9 @@ mod integrate_segment_tests {
 
         let start = Complex::new(0.0, 0.0);
         let end = Complex::new(1.0, 1.0);
+        let piece: LineSegment<Complex<f64>> = (start..end).into();
 
-        let segment = gk.integrate_segment(&f, start..end, false).unwrap();
+        let segment = gk.integrate_piece(&f, &piece, false).unwrap();
 
         // ∫ 2 dz from 0 to 1+i = 2(1+i)
         assert_complex_close(segment.result, Complex::new(2.0, 2.0));
@@ -749,8 +810,9 @@ mod integrate_segment_tests {
 
         let start = Complex::new(0.0, 0.0);
         let end = Complex::new(1.0, 1.0);
+        let piece: LineSegment<Complex<f64>> = (start..end).into();
 
-        let segment = gk.integrate_segment(&f, start..end, false).unwrap();
+        let segment = gk.integrate_piece(&f, &piece, false).unwrap();
 
         // ∫ z dz = z² / 2 from 0 to 1+i = (1+i)² / 2 = i
         assert_complex_close(segment.result, Complex::new(0.0, 1.0));
@@ -760,8 +822,9 @@ mod integrate_segment_tests {
     fn refine_segment_splits_range_at_midpoint_for_simple_integrand() {
         let gk = GaussKronrod::<f64>::default();
         let f = RealFn(|x: &f64| *x);
+        let piece: LineSegment<f64> = (0.0..4.0).into();
 
-        let original = gk.integrate_segment(&f, 0.0..4.0, false).unwrap();
+        let original = gk.integrate_piece(&f, &piece, false).unwrap();
 
         let segments = gk.refine_segment(&f, original, false).unwrap();
 
@@ -770,19 +833,20 @@ mod integrate_segment_tests {
         let left = &segments[0];
         let right = &segments[1];
 
-        assert_close(left.range.start, 0.0);
-        assert_close(left.range.end, 2.0);
+        assert_close(left.piece.point(0.0), 0.0);
+        assert_close(left.piece.point(1.0), 2.0);
 
-        assert_close(right.range.start, 2.0);
-        assert_close(right.range.end, 4.0);
+        assert_close(right.piece.point(0.0), 2.0);
+        assert_close(right.piece.point(1.0), 4.0);
     }
 
     #[test]
     fn refine_segment_preserves_integral_sum_for_polynomial() {
         let gk = GaussKronrod::<f64>::default();
         let f = RealFn(|x: &f64| x * x + 2.0 * x + 1.0);
+        let piece: LineSegment<f64> = (-1.0..3.0).into();
 
-        let original = gk.integrate_segment(&f, -1.0..3.0, false).unwrap();
+        let original = gk.integrate_piece(&f, &piece, false).unwrap();
 
         let segments = gk.refine_segment(&f, original.clone(), false).unwrap();
 
@@ -796,8 +860,9 @@ mod integrate_segment_tests {
     fn refine_segment_returns_two_non_empty_segments_for_simple_integrand() {
         let gk = GaussKronrod::<f64>::default();
         let f = RealFn(|x: &f64| x.sin());
+        let piece: LineSegment<f64> = (-2.0..5.0).into();
 
-        let original = gk.integrate_segment(&f, -2.0..5.0, false).unwrap();
+        let original = gk.integrate_piece(&f, &piece, false).unwrap();
 
         let segments = gk.refine_segment(&f, original, false).unwrap();
 
@@ -806,9 +871,9 @@ mod integrate_segment_tests {
         let left = &segments[0];
         let right = &segments[1];
 
-        assert!(left.range.start != left.range.end);
-        assert!(right.range.start != right.range.end);
-        assert_eq!(left.range.end, right.range.start);
+        assert!(left.piece.point(0.0) != left.piece.point(1.0));
+        assert!(right.piece.point(0.0) != right.piece.point(1.0));
+        assert_eq!(left.piece.point(1.0), right.piece.point(0.0));
     }
 
     #[test]
@@ -818,8 +883,9 @@ mod integrate_segment_tests {
 
         let start = Complex::new(0.0, 0.0);
         let end = Complex::new(2.0, 2.0);
+        let piece: LineSegment<Complex<f64>> = (start..end).into();
 
-        let original = gk.integrate_segment(&f, start..end, false).unwrap();
+        let original = gk.integrate_piece(&f, &piece, false).unwrap();
 
         let segments = gk.refine_segment(&f, original.clone(), false).unwrap();
 
@@ -828,10 +894,10 @@ mod integrate_segment_tests {
         let left = &segments[0];
         let right = &segments[1];
 
-        assert_complex_close(left.range.start, start);
-        assert_complex_close(left.range.end, Complex::new(1.0, 1.0));
-        assert_complex_close(right.range.start, Complex::new(1.0, 1.0));
-        assert_complex_close(right.range.end, end);
+        assert_complex_close(left.piece.point(0.0), start);
+        assert_complex_close(left.piece.point(1.0), Complex::new(1.0, 1.0));
+        assert_complex_close(right.piece.point(0.0), Complex::new(1.0, 1.0));
+        assert_complex_close(right.piece.point(1.0), end);
 
         assert_complex_close(
             segments.iter().map(|each| each.result).sum(),
@@ -845,8 +911,9 @@ mod integrate_segment_tests {
         gk.singularity_handling = SingularityHandling::Error;
 
         let f = RealFn(|_: &f64| f64::NAN);
+        let piece: LineSegment<f64> = (0.0..1.0).into();
 
-        let result = gk.integrate_segment_with_policy(&f, 0.0..1.0, false);
+        let result = gk.integrate_piece_with_policy(&f, &piece, false);
 
         assert!(matches!(
             result,
@@ -864,10 +931,9 @@ mod integrate_segment_tests {
         // If the singularity is detected by fallback midpoint splitting, the policy
         // should eventually produce segments whose interior nodes are finite.
         let f = RealFn(|x: &f64| if *x == 0.0 { f64::NAN } else { x.sqrt() });
+        let piece: LineSegment<f64> = (0.0..1.0).into();
 
-        let segments = gk
-            .integrate_segment_with_policy(&f, 0.0..1.0, false)
-            .unwrap();
+        let segments = gk.integrate_piece_with_policy(&f, &piece, false).unwrap();
 
         assert!(!segments.is_empty());
 
@@ -891,9 +957,9 @@ mod integrate_segment_tests {
             }
         });
 
-        let segments = gk
-            .integrate_segment_with_policy(&f, 0.0..1.0, false)
-            .unwrap();
+        let piece: LineSegment<f64> = (0.0..1.0).into();
+
+        let segments = gk.integrate_piece_with_policy(&f, &piece, false).unwrap();
 
         assert_eq!(segments.len(), 2);
 
@@ -916,11 +982,45 @@ mod integrate_segment_tests {
             }
         });
 
-        let result = gk.integrate_segment_with_policy(&f, 0.0..1.0, false);
+        let piece: LineSegment<f64> = (0.0..1.0).into();
+
+        let result = gk.integrate_piece_with_policy(&f, &piece, false);
 
         assert!(matches!(
             result,
             Err(IntegratorError::PossibleSingularity { .. })
         ));
+    }
+
+    #[test]
+    fn integrates_constant_over_circular_arc() {
+        let gk = GaussKronrod::<f64>::default();
+        let f = ComplexFn(|_: &Complex<f64>| Complex::new(1.0, 0.0));
+
+        let piece = CircularArc::new(
+            Complex::new(0.0, 0.0),
+            1.0,
+            0.0,
+            std::f64::consts::FRAC_PI_2,
+        );
+
+        let segment = gk.integrate_piece(&f, &piece, false).unwrap();
+
+        // ∫ 1 dz = z_end - z_start = i - 1
+        assert_complex_close(segment.result, Complex::new(-1.0, 1.0));
+    }
+
+    #[test]
+    fn integrates_inverse_z_over_unit_semicircle() {
+        let gk = GaussKronrod::<f64>::default();
+        let f = ComplexFn(|z: &Complex<f64>| Complex::new(1.0, 0.0) / *z);
+
+        let piece = CircularArc::new(Complex::new(0.0, 0.0), 1.0, 0.0, std::f64::consts::PI);
+
+        let segment = gk.integrate_piece(&f, &piece, false).unwrap();
+
+        // z = e^{iθ}, dz = i e^{iθ} dθ, 1/z dz = i dθ.
+        // Integral from 0 to π is iπ.
+        assert_complex_close(segment.result, Complex::new(0.0, std::f64::consts::PI));
     }
 }

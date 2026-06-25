@@ -33,6 +33,7 @@
 use crate::{IntegrationOutput, core::IntegratorError};
 
 use nalgebra::ComplexField;
+use num_complex::Complex;
 use num_traits::{Float, FromPrimitive};
 use std::ops::{AddAssign, SubAssign};
 use trellis_runner::TrellisFloat;
@@ -134,9 +135,40 @@ pub trait Integrable {
 /// - `f32`
 /// - `f64`
 pub trait IntegrableFloat:
-    Float + FromPrimitive + AddAssign + SubAssign + TrellisFloat + Send + Sync + 'static
+    ComplexScalar + Float + FromPrimitive + AddAssign + SubAssign + TrellisFloat + Send + Sync + 'static
 {
 }
 
 impl IntegrableFloat for f32 {}
 impl IntegrableFloat for f64 {}
+
+/// Floating-point type with an associated complex scalar type.
+///
+/// This trait is used by complex contour pieces. It connects a real scalar
+/// type, such as `f64`, to the corresponding complex type,
+/// such as `Complex<f64>`.
+///
+/// It also provides a constructor for complex values from real and imaginary
+/// parts, avoiding repeated low-level bounds throughout the contour
+/// implementation.
+pub trait ComplexScalar: Float {
+    type Complex: ComplexField<RealField = Self> + Copy;
+
+    fn complex(re: Self, im: Self) -> Self::Complex;
+}
+
+impl ComplexScalar for f32 {
+    type Complex = Complex<f32>;
+
+    fn complex(re: Self, im: Self) -> Self::Complex {
+        num_complex::Complex::new(re, im)
+    }
+}
+
+impl ComplexScalar for f64 {
+    type Complex = Complex<f64>;
+
+    fn complex(re: Self, im: Self) -> Self::Complex {
+        Complex::new(re, im)
+    }
+}
