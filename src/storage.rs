@@ -190,6 +190,33 @@ where
 
         Some(iter.fold(first, |total, segment| total.add(&segment.result)))
     }
+
+    /// Returns all stored quadrature samples ordered by path position.
+    ///
+    /// Returns `None` if any segment does not contain samples.
+    pub(crate) fn samples(&self) -> Option<crate::core::QuadratureSamples<P::Input, O>> {
+        let mut segments = self.iter().collect::<Vec<_>>();
+
+        segments.sort_by(|a, b| a.key.cmp(&b.key));
+
+        let total_len = segments
+            .iter()
+            .map(|segment| {
+                segment
+                    .samples
+                    .as_ref()
+                    .map(|samples| samples.samples.len())
+            })
+            .sum::<Option<usize>>()?;
+
+        let mut samples = Vec::with_capacity(total_len);
+
+        for segment in segments {
+            samples.extend(segment.samples.as_ref()?.samples.iter().cloned());
+        }
+
+        Some(crate::core::QuadratureSamples { samples })
+    }
 }
 
 /// Entry stored internally by [`SegmentHeap`].
@@ -269,6 +296,7 @@ mod tests {
             result,
             error,
             samples: None,
+            key: crate::core::PathKey::new(0),
         }
     }
 
@@ -359,5 +387,71 @@ mod tests {
             .collect::<Vec<_>>();
 
         assert_eq!(results, vec![10.0, 20.0, 30.0]);
+    }
+
+    use crate::core::{PathKey, QuadratureSample, QuadratureSamples};
+
+    fn segment_with_sample(
+        key: PathKey,
+        error: f64,
+        value: f64,
+    ) -> Segment<LineSegment<f64>, f64, f64> {
+        Segment {
+            piece: LineSegment::new(0.0, 1.0),
+            result: value,
+            error,
+            key,
+            samples: Some(QuadratureSamples {
+                samples: vec![QuadratureSample {
+                    point: value,
+                    weight: 1.0,
+                    value,
+                }],
+            }),
+        }
+    }
+
+    #[test]
+    fn heap_samples_are_returned_in_path_order_not_error_order() {
+        let mut heap = SegmentHeap::<LineSegment<f64>, f64, f64>::new();
+
+        let root = PathKey::new(0);
+        let left_key = root.left_child();
+        let right_key = root.right_child();
+
+        // Push in deliberately wrong order and with errors that force heap order
+        // to be unrelated to path order.
+        heap.push(segment_with_sample(right_key, 10.0, 2.0))
+            .unwrap();
+        heap.push(segment_with_sample(left_key, 1.0, 1.0)).unwrap();
+
+        let samples = heap.samples().unwrap();
+
+        let values = samples
+            .samples
+            .iter()
+            .map(|sample| sample.value)
+            .collect::<Vec<_>>();
+
+        assert_eq!(values, vec![1.0, 2.0]);
+    }
+
+    #[test]
+    fn heap_samples_returns_none_if_any_segment_lacks_samples() {
+        let mut heap = SegmentHeap::<LineSegment<f64>, f64, f64>::new();
+
+        heap.push(segment_with_sample(PathKey::new(0).left_child(), 1.0, 1.0))
+            .unwrap();
+
+        heap.push(Segment {
+            piece: LineSegment::new(0.0, 1.0),
+            result: 2.0,
+            error: 2.0,
+            key: PathKey::new(0).right_child(),
+            samples: None,
+        })
+        .unwrap();
+
+        assert!(heap.samples().is_none());
     }
 }

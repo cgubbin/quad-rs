@@ -138,7 +138,7 @@ where
             error: self.error(),
             refinements: self.refinements,
             evaluations: self.evaluations,
-            samples: todo!(),
+            samples: self.segments.samples(),
         })
     }
 }

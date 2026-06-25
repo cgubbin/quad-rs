@@ -233,7 +233,9 @@ mod contour_indent_tests {
 
         let f = ComplexFn(|z: &Complex<f64>| Complex::new(1.0, 0.0) / *z);
 
-        let segment = gk.integrate_piece(&f, &arc, false).unwrap();
+        let segment = gk
+            .integrate_piece(&f, &arc, crate::core::PathKey::new(0), false)
+            .unwrap();
 
         assert_complex_close(segment.result, Complex::new(0.0, -std::f64::consts::PI));
     }
@@ -263,8 +265,12 @@ mod contour_indent_tests {
             _ => panic!("expected arc"),
         };
 
-        let left_segment = gk.integrate_piece(&f, &left_arc, false).unwrap();
-        let right_segment = gk.integrate_piece(&f, &right_arc, false).unwrap();
+        let left_segment = gk
+            .integrate_piece(&f, &left_arc, crate::core::PathKey::new(0), false)
+            .unwrap();
+        let right_segment = gk
+            .integrate_piece(&f, &right_arc, crate::core::PathKey::new(0), false)
+            .unwrap();
 
         // Upper indentation from -r to +r is clockwise: ∫ dz/z = -iπ.
         assert_complex_close(

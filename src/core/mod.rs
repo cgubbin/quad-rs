@@ -47,7 +47,7 @@ mod pre;
 mod segment;
 
 pub use policy::SingularityHandling;
-pub(crate) use segment::Segment;
+pub(crate) use segment::{PathKey, Segment};
 pub use segment::{QuadratureSample, QuadratureSamples};
 
 pub use error::IntegratorError;
@@ -226,6 +226,7 @@ impl<F> GaussKronrod<F> {
         &self,
         integrand: &Y,
         piece: &P,
+        key: PathKey,
         store_segment_data: bool,
     ) -> Result<Vec<Segment<P, Y::Output, F>>, IntegratorError<Y::Input>>
     where
@@ -235,13 +236,14 @@ impl<F> GaussKronrod<F> {
     {
         match self.singularity_handling {
             SingularityHandling::Error => self
-                .integrate_piece(integrand, piece, store_segment_data)
+                .integrate_piece(integrand, piece, key, store_segment_data)
                 .map(|segment| vec![segment]),
 
             SingularityHandling::RecursiveSplit { max_depth } => self
                 .integrate_piece_with_singularity_splitting_inner(
                     integrand,
                     piece,
+                    key,
                     store_segment_data,
                     0,
                     max_depth,
@@ -261,6 +263,7 @@ impl<F> GaussKronrod<F> {
         &self,
         integrand: &Y,
         piece: &P,
+        key: PathKey,
         store_segment_data: bool,
         depth: usize,
         max_depth: usize,
@@ -270,7 +273,7 @@ impl<F> GaussKronrod<F> {
         Y: Integrable<Float = F>,
         P: ContourPiece<Input = Y::Input, Float = F>,
     {
-        match self.integrate_piece(integrand, piece, store_segment_data) {
+        match self.integrate_piece(integrand, piece, key.clone(), store_segment_data) {
             Ok(segment) => Ok(vec![segment]),
 
             Err(IntegratorError::NonFiniteIntegrand { point }) => {
@@ -287,6 +290,7 @@ impl<F> GaussKronrod<F> {
                 let mut first = self.integrate_piece_with_singularity_splitting_inner(
                     integrand,
                     &first_piece,
+                    key.left_child(),
                     store_segment_data,
                     depth + 1,
                     max_depth,
@@ -295,6 +299,7 @@ impl<F> GaussKronrod<F> {
                 let second = self.integrate_piece_with_singularity_splitting_inner(
                     integrand,
                     &second_piece,
+                    key.right_child(),
                     store_segment_data,
                     depth + 1,
                     max_depth,
@@ -367,6 +372,7 @@ impl<F> GaussKronrod<F> {
         &self,
         integrand: &Y,
         piece: &P,
+        path_key: PathKey,
         store_segment_samples: bool,
     ) -> Result<Segment<P, Y::Output, F>, IntegratorError<Y::Input>>
     where
@@ -522,6 +528,7 @@ impl<F> GaussKronrod<F> {
             piece: piece.clone(),
             result: result_kronrod,
             error,
+            key: path_key,
             samples: match (left_samples, centre_sample, right_samples) {
                 (Some(left), Some(centre), Some(right)) => {
                     Some(QuadratureSamples::from_parts(left, centre, right))
@@ -559,10 +566,18 @@ impl<F> GaussKronrod<F> {
             return Err(IntegratorError::PieceTooSmall);
         }
 
-        let first =
-            self.integrate_piece_with_policy(integrand, &first_piece, store_segment_samples)?;
-        let second =
-            self.integrate_piece_with_policy(integrand, &second_piece, store_segment_samples)?;
+        let first = self.integrate_piece_with_policy(
+            integrand,
+            &first_piece,
+            segment.key.left_child(),
+            store_segment_samples,
+        )?;
+        let second = self.integrate_piece_with_policy(
+            integrand,
+            &second_piece,
+            segment.key.right_child(),
+            store_segment_samples,
+        )?;
 
         Ok(first.into_iter().chain(second).collect())
     }
@@ -708,7 +723,9 @@ mod integrate_piece_tests {
         let f = RealFn(|_: &f64| 3.0);
 
         let piece: LineSegment<f64> = (2.0..5.0).into();
-        let segment = gk.integrate_piece(&f, &piece, false).unwrap();
+        let segment = gk
+            .integrate_piece(&f, &piece, PathKey::new(0), false)
+            .unwrap();
 
         assert_close(segment.result, 9.0);
         assert!(segment.error >= 0.0);
@@ -721,7 +738,9 @@ mod integrate_piece_tests {
         let f = RealFn(|x: &f64| 2.0 * x + 1.0);
         let piece: LineSegment<f64> = (-1.0..3.0).into();
 
-        let segment = gk.integrate_piece(&f, &piece, false).unwrap();
+        let segment = gk
+            .integrate_piece(&f, &piece, PathKey::new(0), false)
+            .unwrap();
 
         // ∫[-1, 3] (2x + 1) dx = [x² + x] = 12
         assert_close(segment.result, 12.0);
@@ -734,7 +753,9 @@ mod integrate_piece_tests {
         let f = RealFn(|x: &f64| x * x);
         let piece: LineSegment<f64> = (0.0..2.0).into();
 
-        let segment = gk.integrate_piece(&f, &piece, false).unwrap();
+        let segment = gk
+            .integrate_piece(&f, &piece, PathKey::new(0), false)
+            .unwrap();
 
         assert_close(segment.result, 8.0 / 3.0);
     }
@@ -745,7 +766,7 @@ mod integrate_piece_tests {
         let f = RealFn(|x: &f64| *x);
         let piece: LineSegment<f64> = (1.0..1.0).into();
 
-        let result = gk.integrate_piece(&f, &piece, false);
+        let result = gk.integrate_piece(&f, &piece, PathKey::new(0), false);
 
         assert!(matches!(result, Err(IntegratorError::EmptySegment)));
     }
@@ -756,7 +777,9 @@ mod integrate_piece_tests {
         let f = RealFn(|x: &f64| x * x);
         let piece: LineSegment<f64> = (0.0..1.0).into();
 
-        let segment = gk.integrate_piece(&f, &piece, true).unwrap();
+        let segment = gk
+            .integrate_piece(&f, &piece, PathKey::new(0), true)
+            .unwrap();
 
         let samples = segment.samples.expect("expected segment samples");
 
@@ -771,7 +794,9 @@ mod integrate_piece_tests {
         let f = RealFn(|x: &f64| x * x);
         let piece: LineSegment<f64> = (0.0..1.0).into();
 
-        let segment = gk.integrate_piece(&f, &piece, false).unwrap();
+        let segment = gk
+            .integrate_piece(&f, &piece, PathKey::new(0), false)
+            .unwrap();
 
         assert!(segment.samples.is_none());
     }
@@ -782,7 +807,7 @@ mod integrate_piece_tests {
         let f = RealFn(|_: &f64| f64::NAN);
         let piece: LineSegment<f64> = (0.0..1.0).into();
 
-        let result = gk.integrate_piece(&f, &piece, false);
+        let result = gk.integrate_piece(&f, &piece, PathKey::new(0), false);
 
         assert!(result.is_err());
     }
@@ -796,7 +821,9 @@ mod integrate_piece_tests {
         let end = Complex::new(1.0, 1.0);
         let piece: LineSegment<Complex<f64>> = (start..end).into();
 
-        let segment = gk.integrate_piece(&f, &piece, false).unwrap();
+        let segment = gk
+            .integrate_piece(&f, &piece, PathKey::new(0), false)
+            .unwrap();
 
         // ∫ 2 dz from 0 to 1+i = 2(1+i)
         assert_complex_close(segment.result, Complex::new(2.0, 2.0));
@@ -811,7 +838,9 @@ mod integrate_piece_tests {
         let end = Complex::new(1.0, 1.0);
         let piece: LineSegment<Complex<f64>> = (start..end).into();
 
-        let segment = gk.integrate_piece(&f, &piece, false).unwrap();
+        let segment = gk
+            .integrate_piece(&f, &piece, PathKey::new(0), false)
+            .unwrap();
 
         // ∫ z dz = z² / 2 from 0 to 1+i = (1+i)² / 2 = i
         assert_complex_close(segment.result, Complex::new(0.0, 1.0));
@@ -823,7 +852,9 @@ mod integrate_piece_tests {
         let f = RealFn(|x: &f64| *x);
         let piece: LineSegment<f64> = (0.0..4.0).into();
 
-        let original = gk.integrate_piece(&f, &piece, false).unwrap();
+        let original = gk
+            .integrate_piece(&f, &piece, PathKey::new(0), false)
+            .unwrap();
 
         let segments = gk.refine_segment(&f, original, false).unwrap();
 
@@ -845,7 +876,9 @@ mod integrate_piece_tests {
         let f = RealFn(|x: &f64| x * x + 2.0 * x + 1.0);
         let piece: LineSegment<f64> = (-1.0..3.0).into();
 
-        let original = gk.integrate_piece(&f, &piece, false).unwrap();
+        let original = gk
+            .integrate_piece(&f, &piece, PathKey::new(0), false)
+            .unwrap();
 
         let segments = gk.refine_segment(&f, original.clone(), false).unwrap();
 
@@ -861,7 +894,9 @@ mod integrate_piece_tests {
         let f = RealFn(|x: &f64| x.sin());
         let piece: LineSegment<f64> = (-2.0..5.0).into();
 
-        let original = gk.integrate_piece(&f, &piece, false).unwrap();
+        let original = gk
+            .integrate_piece(&f, &piece, PathKey::new(0), false)
+            .unwrap();
 
         let segments = gk.refine_segment(&f, original, false).unwrap();
 
@@ -884,7 +919,9 @@ mod integrate_piece_tests {
         let end = Complex::new(2.0, 2.0);
         let piece: LineSegment<Complex<f64>> = (start..end).into();
 
-        let original = gk.integrate_piece(&f, &piece, false).unwrap();
+        let original = gk
+            .integrate_piece(&f, &piece, PathKey::new(0), false)
+            .unwrap();
 
         let segments = gk.refine_segment(&f, original.clone(), false).unwrap();
 
@@ -912,7 +949,7 @@ mod integrate_piece_tests {
         let f = RealFn(|_: &f64| f64::NAN);
         let piece: LineSegment<f64> = (0.0..1.0).into();
 
-        let result = gk.integrate_piece_with_policy(&f, &piece, false);
+        let result = gk.integrate_piece_with_policy(&f, &piece, PathKey::new(0), false);
 
         assert!(matches!(
             result,
@@ -932,7 +969,9 @@ mod integrate_piece_tests {
         let f = RealFn(|x: &f64| if *x == 0.0 { f64::NAN } else { x.sqrt() });
         let piece: LineSegment<f64> = (0.0..1.0).into();
 
-        let segments = gk.integrate_piece_with_policy(&f, &piece, false).unwrap();
+        let segments = gk
+            .integrate_piece_with_policy(&f, &piece, PathKey::new(0), false)
+            .unwrap();
 
         assert!(!segments.is_empty());
 
@@ -958,7 +997,9 @@ mod integrate_piece_tests {
 
         let piece: LineSegment<f64> = (0.0..1.0).into();
 
-        let segments = gk.integrate_piece_with_policy(&f, &piece, false).unwrap();
+        let segments = gk
+            .integrate_piece_with_policy(&f, &piece, PathKey::new(0), false)
+            .unwrap();
 
         assert_eq!(segments.len(), 2);
 
@@ -983,7 +1024,7 @@ mod integrate_piece_tests {
 
         let piece: LineSegment<f64> = (0.0..1.0).into();
 
-        let result = gk.integrate_piece_with_policy(&f, &piece, false);
+        let result = gk.integrate_piece_with_policy(&f, &piece, PathKey::new(0), false);
 
         assert!(matches!(
             result,
@@ -1003,7 +1044,9 @@ mod integrate_piece_tests {
             std::f64::consts::FRAC_PI_2,
         );
 
-        let segment = gk.integrate_piece(&f, &piece, false).unwrap();
+        let segment = gk
+            .integrate_piece(&f, &piece, PathKey::new(0), false)
+            .unwrap();
 
         // ∫ 1 dz = z_end - z_start = i - 1
         assert_complex_close(segment.result, Complex::new(-1.0, 1.0));
@@ -1016,7 +1059,9 @@ mod integrate_piece_tests {
 
         let piece = CircularArc::new(Complex::new(0.0, 0.0), 1.0, 0.0, std::f64::consts::PI);
 
-        let segment = gk.integrate_piece(&f, &piece, false).unwrap();
+        let segment = gk
+            .integrate_piece(&f, &piece, PathKey::new(0), false)
+            .unwrap();
 
         // z = e^{iθ}, dz = i e^{iθ} dθ, 1/z dz = i dθ.
         // Integral from 0 to π is iπ.

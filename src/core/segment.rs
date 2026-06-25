@@ -1,5 +1,37 @@
-
 use crate::ContourPiece;
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+pub enum Branch {
+    Left,
+    Right,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+pub struct PathKey {
+    pub root: usize,
+    pub path: Vec<Branch>,
+}
+
+impl PathKey {
+    pub fn new(root: usize) -> Self {
+        Self {
+            root,
+            path: Vec::new(),
+        }
+    }
+
+    pub fn left_child(&self) -> Self {
+        let mut key = self.clone();
+        key.path.push(Branch::Left);
+        key
+    }
+
+    pub fn right_child(&self) -> Self {
+        let mut key = self.clone();
+        key.path.push(Branch::Right);
+        key
+    }
+}
 
 /// Result of applying an integration rule to one interval.
 ///
@@ -23,6 +55,8 @@ where
 
     /// Optional quadrature samples used to compute `result`.
     pub samples: Option<QuadratureSamples<P::Input, O>>,
+
+    pub key: PathKey,
 }
 
 /// Inner data for a segment, containing the resolved values.
@@ -69,5 +103,43 @@ impl<I, O> QuadratureSamples<I, O> {
         samples.extend(right);
 
         Self { samples }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn path_key_orders_roots_before_later_roots() {
+        assert!(PathKey::new(0) < PathKey::new(1));
+    }
+
+    #[test]
+    fn path_key_orders_left_child_before_right_child() {
+        let root = PathKey::new(0);
+
+        assert!(root.left_child() < root.right_child());
+    }
+
+    #[test]
+    fn path_key_orders_depth_first_within_root() {
+        let root = PathKey::new(0);
+
+        let left = root.left_child();
+        let left_left = left.left_child();
+        let left_right = left.right_child();
+        let right = root.right_child();
+
+        let mut keys = vec![
+            right.clone(),
+            left_right.clone(),
+            left_left.clone(),
+            left.clone(),
+        ];
+
+        keys.sort();
+
+        assert_eq!(keys, vec![left, left_left, left_right, right]);
     }
 }

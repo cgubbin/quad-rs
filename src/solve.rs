@@ -38,15 +38,13 @@
 use crate::{
     ComplexScalar, Contour, ContourPiece, ContourSegment, Integrable, IntegrableFloat,
     IntegrationState, IntegrationSummary, IntegratorConfig, LineSegment,
-    core::{GaussKronrod, IntegratorError},
+    core::{GaussKronrod, IntegratorError, PathKey},
 };
 
 use nalgebra::ComplexField;
 use num_traits::{Float, FromPrimitive};
 use std::ops::{AddAssign, SubAssign};
-use trellis_runner::{
-    CancellationGuard, FallibleProcedure,
-};
+use trellis_runner::{CancellationGuard, FallibleProcedure};
 
 /// Adaptive Gauss–Kronrod integrator.
 ///
@@ -153,13 +151,14 @@ where
         problem: &mut P,
         state: &mut Self::State,
     ) -> Result<(), Self::Error> {
-        // TODO: Singularity handling. Domains should be automatically split on known
-        // singularities.
-        // How to make this robust for complex arguments?
-        for piece in &self.contour {
-            let segments =
-                self.inner
-                    .integrate_piece_with_policy(problem, piece, self.store_segment_data)?;
+        for (root, piece) in self.contour.iter().enumerate() {
+            let key = PathKey::new(root);
+            let segments = self.inner.integrate_piece_with_policy(
+                problem,
+                piece,
+                key,
+                self.store_segment_data,
+            )?;
             state.record_evaluations(segments.len() * self.inner.evaluations_per_segment());
             state.record_refinements(segments.len());
             state.push_segments(segments)?;
