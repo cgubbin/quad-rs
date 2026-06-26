@@ -30,8 +30,6 @@
 //! require any knowledge of the concrete output type beyond the operations
 //! provided by [`IntegrationOutput`].
 
-use crate::{IntegrationOutput, core::IntegratorError};
-
 use nalgebra::ComplexField;
 use num_complex::Complex;
 use num_traits::{Float, FromPrimitive};
@@ -87,7 +85,7 @@ pub trait Integrable {
     ///
     /// This may be a scalar, complex scalar, vector, matrix, or other type
     /// implementing [`IntegrationOutput`].
-    type Output: IntegrationOutput<Scalar = Self::Input, Float = Self::Float>;
+    type Output: Clone; //: IntegrationOutput<Self::Input, Float = Self::Float>;
 
     /// Evaluates the integrand at `input`.
     ///
@@ -96,32 +94,6 @@ pub trait Integrable {
     /// [`checked_integrand`](Self::checked_integrand) instead unless they
     /// explicitly wish to handle invalid values themselves.
     fn integrand(&self, input: &Self::Input) -> Self::Output;
-
-    /// Evaluates the integrand and verifies that the result is finite.
-    ///
-    /// This is a convenience wrapper around [`integrand`](Self::integrand)
-    /// used internally by the adaptive integration routines.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`IntegratorError::NonFiniteIntegrand`] if the evaluated value
-    /// contains `NaN` or infinity.
-    ///
-    /// The returned error contains the evaluation point that produced the
-    /// non-finite result, allowing higher-level singularity handling policies
-    /// to decide whether the segment should be subdivided.
-    fn checked_integrand(
-        &self,
-        input: &Self::Input,
-    ) -> Result<Self::Output, IntegratorError<Self::Input>> {
-        let value = self.integrand(input);
-
-        if !value.is_finite() {
-            return Err(IntegratorError::NonFiniteIntegrand { point: *input });
-        }
-
-        Ok(value)
-    }
 }
 
 /// Floating-point type supported by the integration routines.

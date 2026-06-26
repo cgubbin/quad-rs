@@ -39,7 +39,6 @@ impl PathKey {
 /// local error estimate, and optionally the quadrature samples used to produce
 /// the estimate.
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Segment<P, O, F>
 where
     P: ContourPiece<Float = F>,
@@ -64,7 +63,6 @@ where
 /// This is useful for situations where we want both the integrated quantity, and
 /// visibility over the integrand.
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct QuadratureSample<I, O> {
     /// Evaluation points in the input domain, ordered from left to right on the
     /// reference rule.
@@ -81,7 +79,6 @@ pub struct QuadratureSample<I, O> {
 }
 
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct QuadratureSamples<I, O> {
     pub samples: Vec<QuadratureSample<I, O>>,
 }

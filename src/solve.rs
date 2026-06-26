@@ -37,7 +37,7 @@
 
 use crate::{
     ComplexScalar, Contour, ContourPiece, ContourSegment, Integrable, IntegrableFloat,
-    IntegrationState, IntegrationSummary, IntegratorConfig, LineSegment,
+    IntegrationOutput, IntegrationState, IntegrationSummary, IntegratorConfig, LineSegment,
     core::{GaussKronrod, IntegratorError, PathKey},
 };
 
@@ -138,6 +138,7 @@ impl<P, Piece, F> FallibleProcedure<P> for Integrator<Piece, F>
 where
     P: Integrable<Float = F>,
     Piece: ContourPiece<Float = F, Input = P::Input>,
+    <P as Integrable>::Output: IntegrationOutput<Piece::Input, Float = F>,
     F: IntegrableFloat,
 {
     type Output = IntegrationSummary<P::Input, P::Output, F>;

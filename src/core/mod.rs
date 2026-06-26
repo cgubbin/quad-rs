@@ -144,6 +144,23 @@ impl<F: FromPrimitive> Default for GaussKronrod<F> {
     }
 }
 
+fn checked_integrand<Y, S>(
+    integrand: &Y,
+    input: &Y::Input,
+) -> Result<Y::Output, IntegratorError<Y::Input>>
+where
+    Y: Integrable,
+    Y::Output: IntegrationOutput<S, Float = Y::Float>,
+{
+    let value = integrand.integrand(input);
+
+    if !value.is_finite() {
+        return Err(IntegratorError::NonFiniteIntegrand { point: *input });
+    }
+
+    Ok(value)
+}
+
 impl<F> GaussKronrod<F>
 where
     F: Float + FromPrimitive + std::ops::SubAssign + std::ops::AddAssign,
@@ -231,6 +248,7 @@ impl<F> GaussKronrod<F> {
     where
         F: Float + FromPrimitive,
         Y: Integrable<Float = F>,
+        <Y as Integrable>::Output: IntegrationOutput<Y::Input, Float = F>,
         P: ContourPiece<Input = Y::Input, Float = F>,
     {
         match self.singularity_handling {
@@ -270,6 +288,7 @@ impl<F> GaussKronrod<F> {
     where
         F: Float + FromPrimitive,
         Y: Integrable<Float = F>,
+        <Y as Integrable>::Output: IntegrationOutput<Y::Input, Float = F>,
         P: ContourPiece<Input = Y::Input, Float = F>,
     {
         match self.integrate_piece(integrand, piece, key.clone(), store_segment_data) {
@@ -377,6 +396,7 @@ impl<F> GaussKronrod<F> {
     where
         F: Float + FromPrimitive,
         Y: Integrable<Float = F>,
+        <Y as Integrable>::Output: IntegrationOutput<Y::Input, Float = F>,
         P: ContourPiece<Input = Y::Input, Float = F>,
     {
         if piece.is_degenerate() {
@@ -402,7 +422,7 @@ impl<F> GaussKronrod<F> {
         let t_center = half_f;
         let point_center = piece.point(t_center);
         let jac_center = piece.derivative(t_center);
-        let f_center = integrand.checked_integrand(&point_center)?;
+        let f_center = checked_integrand(integrand, &point_center)?;
 
         let center_weight = self.wgk[self.n - 1];
         let center_weight_i = Y::Input::from_real(center_weight) * half_i;
@@ -448,8 +468,8 @@ impl<F> GaussKronrod<F> {
             let jac_left = piece.derivative(t_left);
             let jac_right = piece.derivative(t_right);
 
-            let f_left = integrand.checked_integrand(&point_left)?;
-            let f_right = integrand.checked_integrand(&point_right)?;
+            let f_left = checked_integrand(integrand, &point_left)?;
+            let f_right = checked_integrand(integrand, &point_right)?;
 
             let wk = self.wgk[j];
 
@@ -555,6 +575,7 @@ impl<F> GaussKronrod<F> {
     where
         F: Float + FromPrimitive,
         Y: Integrable<Float = F>,
+        <Y as Integrable>::Output: IntegrationOutput<Y::Input, Float = F>,
         P: ContourPiece<Input = Y::Input, Float = F>,
     {
         let [first_piece, second_piece] = segment.piece.split();

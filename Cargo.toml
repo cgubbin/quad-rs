@@ -13,23 +13,22 @@ homepage = "https://github.com/cgubbin/quad-rs/"
 readme = "README.md"
 
 [dependencies]
-approx = "0.5.1"
 nalgebra = "0.33.2"
 ndarray = { version = "0.15.6", optional = true }
-ndarray-stats = { version = "0.5.1", optional = true }
 num-complex = "0.4.0"
 num-traits = "0.2.14"
 ordered-float = "2.10.0"
-rayon = "1.8.1"
-serde = { version = "1.0.197", features = ["derive"] , optional=true}
 thiserror = "2"
 trellis-runner = "0.4"
 
-[features]
-ndarray = ["dep:ndarray", "dep:ndarray-stats"]
 
 [dev-dependencies]
+approx = "0.5.1"
 rand = "0.8.4"
+
+[[test]]
+name = "ndarray_integration"
+required-features = ["ndarray"]
 
 [[example]]
 name = "vector_valued"

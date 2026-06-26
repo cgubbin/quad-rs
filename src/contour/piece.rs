@@ -177,7 +177,6 @@ where
 /// `LineSegment` is generic over the input type and can represent both real
 /// intervals and complex line segments.
 #[derive(Debug, Clone, Copy)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct LineSegment<I> {
     start: I,
     end: I,
@@ -365,4 +364,10 @@ where
             Self::new(self.center, self.radius, mid, self.theta1),
         ]
     }
+}
+
+pub enum InfiniteInterval<F> {
+    Whole,
+    From(F),
+    To(F),
 }

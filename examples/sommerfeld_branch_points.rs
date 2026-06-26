@@ -46,16 +46,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let result = integrate_complex(Sommerfeld { k, x, z }, contour, config)?;
 
-    println!("Sommerfeld-style spectral integral");
-    println!("k      = {k}");
-    println!("x      = {x}");
-    println!("z      = {z}");
-    println!("cutoff = {cutoff}");
-    println!();
-    println!("Integral estimate: {}", result.integral);
-    println!("Error estimate:    {}", result.error);
-    println!("Evaluations:       {}", result.evaluations);
-    println!("Refinements:       {}", result.refinements);
+    println!("Finite Sommerfeld-style spectral integral");
+    println!("k:        {k}");
+    println!("x:        {x}");
+    println!("z:        {z}");
+    println!("cutoff:   {cutoff}");
+    println!("Integral: {}", result.integral);
+    println!("Error:    {}", result.error);
+    println!("Evals:    {}", result.evaluations);
+    println!("Refines:  {}", result.refinements);
 
     Ok(())
 }

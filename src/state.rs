@@ -13,7 +13,6 @@ use trellis_runner::{Progress, ProgressDiagnostics, TrellisFloat, UserState};
 /// estimate directly: the integral and error are derived from the active
 /// segments, which remain the single source of truth.
 #[derive(Clone, Default, Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct IntegrationState<P, O, F>
 where
     F: PartialOrd + PartialEq,
@@ -49,7 +48,7 @@ pub(crate) struct IntegrationSummary<I, O, F> {
 impl<P, O, F> IntegrationState<P, O, F>
 where
     F: Float,
-    O: IntegrationOutput<Float = F>,
+    O: IntegrationOutput<P::Input, Float = F>,
     P: ContourPiece<Float = F>,
 {
     /// Create a new instance of IntegrationState
@@ -146,7 +145,7 @@ where
 impl<P, O, F> UserState for IntegrationState<P, O, F>
 where
     F: Float + TrellisFloat,
-    O: IntegrationOutput<Float = F>,
+    O: IntegrationOutput<P::Input, Float = F>,
     P: ContourPiece<Float = F>,
 {
     type Float = F;

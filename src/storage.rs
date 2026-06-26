@@ -75,7 +75,6 @@ use std::collections::BinaryHeap;
 /// Segments are not stored in geometric or input-domain order. The internal
 /// ordering is purely determined by adaptive refinement priority.
 #[derive(Clone, Default, Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SegmentHeap<P, O, F>
 where
     F: PartialEq + PartialOrd,
@@ -171,7 +170,7 @@ where
 impl<P, O, F> SegmentHeap<P, O, F>
 where
     F: Float,
-    O: IntegrationOutput<Float = F>,
+    O: IntegrationOutput<P::Input, Float = F>,
     P: ContourPiece<Float = F>,
 {
     /// Returns the sum of all local segment error estimates.
@@ -235,7 +234,6 @@ where
 /// When two entries have identical error estimates, the older entry is treated
 /// as greater and will be removed first.
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 struct HeapEntry<P, O, F>
 where
     P: ContourPiece<Float = F>,

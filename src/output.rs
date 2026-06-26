@@ -53,20 +53,14 @@ pub enum ErrorNorm {
 ///
 /// # Associated types
 ///
-/// - [`Scalar`](Self::Scalar): scalar type used to scale the output. For real
-///   integration this is usually `f64`; for contour integration this is usually
-///   `Complex<f64>`.
 /// - [`Float`](Self::Float): underlying real floating-point type.
-pub trait IntegrationOutput: Clone + Default {
-    /// Scalar type used to scale this output.
-    type Scalar: ComplexField<RealField = Self::Float>;
-
+pub trait IntegrationOutput<S>: Clone + Default {
     /// Underlying real floating-point type.
     type Float: IntegrableFloat;
 
     fn add(&self, other: &Self) -> Self;
     fn sub(&self, other: &Self) -> Self;
-    fn mul_scalar(&self, scalar: &Self::Scalar) -> Self;
+    fn mul_scalar(&self, scalar: &S) -> Self;
 
     /// Returns a scalar magnitude for this output.
     ///
@@ -92,8 +86,7 @@ pub trait IntegrationOutput: Clone + Default {
     }
 }
 
-impl IntegrationOutput for Complex<f32> {
-    type Scalar = Self;
+impl IntegrationOutput<Complex<f32>> for Complex<f32> {
     type Float = f32;
 
     fn add(&self, other: &Self) -> Self {
@@ -102,7 +95,7 @@ impl IntegrationOutput for Complex<f32> {
     fn sub(&self, other: &Self) -> Self {
         self - other
     }
-    fn mul_scalar(&self, scalar: &Self::Scalar) -> Self {
+    fn mul_scalar(&self, scalar: &Complex<f32>) -> Self {
         self * scalar
     }
 
@@ -115,16 +108,45 @@ impl IntegrationOutput for Complex<f32> {
     }
 
     fn max_component(&self) -> Self::Float {
-        self.modulus()
+        <Self as IntegrationOutput<Complex<f32>>>::modulus(self)
     }
 
     fn mean_component(&self) -> Self::Float {
-        self.modulus()
+        <Self as IntegrationOutput<Complex<f32>>>::modulus(self)
     }
 }
 
-impl IntegrationOutput for f32 {
-    type Scalar = Self;
+impl IntegrationOutput<f32> for Complex<f32> {
+    type Float = f32;
+
+    fn add(&self, other: &Self) -> Self {
+        self + other
+    }
+    fn sub(&self, other: &Self) -> Self {
+        self - other
+    }
+    fn mul_scalar(&self, scalar: &f32) -> Self {
+        self * scalar
+    }
+
+    fn modulus(&self) -> Self::Float {
+        <Self as ComplexField>::modulus(*self)
+    }
+
+    fn is_finite(&self) -> bool {
+        ComplexField::is_finite(self)
+    }
+
+    fn max_component(&self) -> Self::Float {
+        <Self as IntegrationOutput<f32>>::modulus(self)
+    }
+
+    fn mean_component(&self) -> Self::Float {
+        <Self as IntegrationOutput<f32>>::modulus(self)
+    }
+}
+
+impl IntegrationOutput<f32> for f32 {
     type Float = Self;
 
     fn add(&self, other: &Self) -> Self {
@@ -133,7 +155,7 @@ impl IntegrationOutput for f32 {
     fn sub(&self, other: &Self) -> Self {
         self - other
     }
-    fn mul_scalar(&self, scalar: &Self::Scalar) -> Self {
+    fn mul_scalar(&self, scalar: &f32) -> Self {
         self * scalar
     }
 
@@ -154,8 +176,7 @@ impl IntegrationOutput for f32 {
     }
 }
 
-impl IntegrationOutput for Complex<f64> {
-    type Scalar = Self;
+impl IntegrationOutput<Complex<f64>> for Complex<f64> {
     type Float = f64;
 
     fn add(&self, other: &Self) -> Self {
@@ -164,7 +185,7 @@ impl IntegrationOutput for Complex<f64> {
     fn sub(&self, other: &Self) -> Self {
         self - other
     }
-    fn mul_scalar(&self, scalar: &Self::Scalar) -> Self {
+    fn mul_scalar(&self, scalar: &Complex<f64>) -> Self {
         self * scalar
     }
 
@@ -177,16 +198,45 @@ impl IntegrationOutput for Complex<f64> {
     }
 
     fn max_component(&self) -> Self::Float {
-        self.modulus()
+        <Self as IntegrationOutput<Complex<f64>>>::modulus(self)
     }
 
     fn mean_component(&self) -> Self::Float {
-        self.modulus()
+        <Self as IntegrationOutput<Complex<f64>>>::modulus(self)
     }
 }
 
-impl IntegrationOutput for f64 {
-    type Scalar = Self;
+impl IntegrationOutput<f64> for Complex<f64> {
+    type Float = f64;
+
+    fn add(&self, other: &Self) -> Self {
+        self + other
+    }
+    fn sub(&self, other: &Self) -> Self {
+        self - other
+    }
+    fn mul_scalar(&self, scalar: &f64) -> Self {
+        self * scalar
+    }
+
+    fn modulus(&self) -> Self::Float {
+        <Self as ComplexField>::modulus(*self)
+    }
+
+    fn is_finite(&self) -> bool {
+        ComplexField::is_finite(self)
+    }
+
+    fn max_component(&self) -> Self::Float {
+        <Self as IntegrationOutput<f64>>::modulus(self)
+    }
+
+    fn mean_component(&self) -> Self::Float {
+        <Self as IntegrationOutput<f64>>::modulus(self)
+    }
+}
+
+impl IntegrationOutput<f64> for f64 {
     type Float = Self;
 
     fn add(&self, other: &Self) -> Self {
@@ -195,7 +245,7 @@ impl IntegrationOutput for f64 {
     fn sub(&self, other: &Self) -> Self {
         self - other
     }
-    fn mul_scalar(&self, scalar: &Self::Scalar) -> Self {
+    fn mul_scalar(&self, scalar: &f64) -> Self {
         self * scalar
     }
 
@@ -208,11 +258,11 @@ impl IntegrationOutput for f64 {
     }
 
     fn max_component(&self) -> Self::Float {
-        self.modulus()
+        <Self as IntegrationOutput<f64>>::modulus(self)
     }
 
     fn mean_component(&self) -> Self::Float {
-        self.modulus()
+        <Self as IntegrationOutput<f64>>::modulus(self)
     }
 }
 
@@ -220,14 +270,11 @@ impl IntegrationOutput for f64 {
 use ndarray::{Array, Dimension};
 
 #[cfg(feature = "ndarray")]
-impl<T, D> IntegrationOutput for Array<T, D>
+impl<D> IntegrationOutput<f32> for Array<f32, D>
 where
     D: Dimension,
-    T: ComplexField + Copy + Default,
-    T::RealField: IntegrableFloat + std::iter::Sum,
 {
-    type Scalar = T;
-    type Float = T::RealField;
+    type Float = f32;
 
     fn add(&self, other: &Self) -> Self {
         self + other
@@ -237,7 +284,7 @@ where
         self - other
     }
 
-    fn mul_scalar(&self, scalar: &Self::Scalar) -> Self {
+    fn mul_scalar(&self, scalar: &f32) -> Self {
         self.mapv(|value| value * *scalar)
     }
 
@@ -252,7 +299,7 @@ where
     }
 
     fn is_finite(&self) -> bool {
-        self.iter().all(|value| value.is_finite())
+        self.iter().all(|value| f32::is_finite(*value))
     }
 
     fn max_component(&self) -> Self::Float {
@@ -277,14 +324,275 @@ where
     }
 }
 
+#[cfg(feature = "ndarray")]
+impl<D> IntegrationOutput<f32> for Array<Complex<f32>, D>
+where
+    D: Dimension,
+{
+    type Float = f32;
+
+    fn add(&self, other: &Self) -> Self {
+        self + other
+    }
+
+    fn sub(&self, other: &Self) -> Self {
+        self - other
+    }
+
+    fn mul_scalar(&self, scalar: &f32) -> Self {
+        self.mapv(|value| value * *scalar)
+    }
+
+    fn modulus(&self) -> Self::Float {
+        self.iter()
+            .map(|value| {
+                let x = value.abs();
+                x * x
+            })
+            .sum::<Self::Float>()
+            .sqrt()
+    }
+
+    fn is_finite(&self) -> bool {
+        self.iter().all(|value| Complex::is_finite(*value))
+    }
+
+    fn max_component(&self) -> Self::Float {
+        self.iter().map(|value| value.abs()).fold(
+            <Self::Float as num_traits::Float>::neg_zero(),
+            |acc, value| {
+                if value > acc { value } else { acc }
+            },
+        )
+    }
+
+    fn mean_component(&self) -> Self::Float {
+        if self.is_empty() {
+            return <Self::Float as num_traits::Float>::neg_zero();
+        }
+
+        let sum = self.iter().map(|value| value.abs()).sum::<Self::Float>();
+        sum / <Self::Float as num_traits::FromPrimitive>::from_usize(self.len()).unwrap()
+    }
+}
+
+#[cfg(feature = "ndarray")]
+impl<D> IntegrationOutput<Complex<f32>> for Array<Complex<f32>, D>
+where
+    D: Dimension,
+{
+    type Float = f32;
+
+    fn add(&self, other: &Self) -> Self {
+        self + other
+    }
+
+    fn sub(&self, other: &Self) -> Self {
+        self - other
+    }
+
+    fn mul_scalar(&self, scalar: &Complex<f32>) -> Self {
+        self.mapv(|value| value * *scalar)
+    }
+
+    fn modulus(&self) -> Self::Float {
+        self.iter()
+            .map(|value| {
+                let x = value.abs();
+                x * x
+            })
+            .sum::<Self::Float>()
+            .sqrt()
+    }
+
+    fn is_finite(&self) -> bool {
+        self.iter().all(|value| Complex::is_finite(*value))
+    }
+
+    fn max_component(&self) -> Self::Float {
+        self.iter().map(|value| value.abs()).fold(
+            <Self::Float as num_traits::Float>::neg_zero(),
+            |acc, value| {
+                if value > acc { value } else { acc }
+            },
+        )
+    }
+
+    fn mean_component(&self) -> Self::Float {
+        if self.is_empty() {
+            return <Self::Float as num_traits::Float>::neg_zero();
+        }
+
+        let sum = self.iter().map(|value| value.abs()).sum::<Self::Float>();
+        sum / <Self::Float as num_traits::FromPrimitive>::from_usize(self.len()).unwrap()
+    }
+}
+
+#[cfg(feature = "ndarray")]
+impl<D> IntegrationOutput<f64> for Array<f64, D>
+where
+    D: Dimension,
+{
+    type Float = f64;
+
+    fn add(&self, other: &Self) -> Self {
+        self + other
+    }
+
+    fn sub(&self, other: &Self) -> Self {
+        self - other
+    }
+
+    fn mul_scalar(&self, scalar: &f64) -> Self {
+        self.mapv(|value| value * *scalar)
+    }
+
+    fn modulus(&self) -> Self::Float {
+        self.iter()
+            .map(|value| {
+                let x = value.abs();
+                x * x
+            })
+            .sum::<Self::Float>()
+            .sqrt()
+    }
+
+    fn is_finite(&self) -> bool {
+        self.iter().all(|value| f64::is_finite(*value))
+    }
+
+    fn max_component(&self) -> Self::Float {
+        self.iter().map(|value| value.abs()).fold(
+            <Self::Float as num_traits::Float>::neg_zero(),
+            |acc, value| {
+                if value > acc { value } else { acc }
+            },
+        )
+    }
+
+    fn mean_component(&self) -> Self::Float {
+        if self.is_empty() {
+            return <Self::Float as num_traits::Float>::neg_zero();
+        }
+
+        let sum = self.iter().map(|value| value.abs()).sum::<Self::Float>();
+        sum / <Self::Float as num_traits::FromPrimitive>::from_usize(self.len()).unwrap()
+    }
+}
+
+#[cfg(feature = "ndarray")]
+impl<D> IntegrationOutput<f64> for Array<Complex<f64>, D>
+where
+    D: Dimension,
+{
+    type Float = f64;
+
+    fn add(&self, other: &Self) -> Self {
+        self + other
+    }
+
+    fn sub(&self, other: &Self) -> Self {
+        self - other
+    }
+
+    fn mul_scalar(&self, scalar: &f64) -> Self {
+        self.mapv(|value| value * *scalar)
+    }
+
+    fn modulus(&self) -> Self::Float {
+        self.iter()
+            .map(|value| {
+                let x = value.abs();
+                x * x
+            })
+            .sum::<Self::Float>()
+            .sqrt()
+    }
+
+    fn is_finite(&self) -> bool {
+        self.iter().all(|value| Complex::is_finite(*value))
+    }
+
+    fn max_component(&self) -> Self::Float {
+        self.iter().map(|value| value.abs()).fold(
+            <Self::Float as num_traits::Float>::neg_zero(),
+            |acc, value| {
+                if value > acc { value } else { acc }
+            },
+        )
+    }
+
+    fn mean_component(&self) -> Self::Float {
+        if self.is_empty() {
+            return <Self::Float as num_traits::Float>::neg_zero();
+        }
+
+        let sum = self.iter().map(|value| value.abs()).sum::<Self::Float>();
+        sum / <Self::Float as num_traits::FromPrimitive>::from_usize(self.len()).unwrap()
+    }
+}
+
+#[cfg(feature = "ndarray")]
+impl<D> IntegrationOutput<Complex<f64>> for Array<Complex<f64>, D>
+where
+    D: Dimension,
+{
+    type Float = f64;
+
+    fn add(&self, other: &Self) -> Self {
+        self + other
+    }
+
+    fn sub(&self, other: &Self) -> Self {
+        self - other
+    }
+
+    fn mul_scalar(&self, scalar: &Complex<f64>) -> Self {
+        self.mapv(|value| value * *scalar)
+    }
+
+    fn modulus(&self) -> Self::Float {
+        self.iter()
+            .map(|value| {
+                let x = value.abs();
+                x * x
+            })
+            .sum::<Self::Float>()
+            .sqrt()
+    }
+
+    fn is_finite(&self) -> bool {
+        self.iter().all(|value| Complex::is_finite(*value))
+    }
+
+    fn max_component(&self) -> Self::Float {
+        self.iter().map(|value| value.abs()).fold(
+            <Self::Float as num_traits::Float>::neg_zero(),
+            |acc, value| {
+                if value > acc { value } else { acc }
+            },
+        )
+    }
+
+    fn mean_component(&self) -> Self::Float {
+        if self.is_empty() {
+            return <Self::Float as num_traits::Float>::neg_zero();
+        }
+
+        let sum = self.iter().map(|value| value.abs()).sum::<Self::Float>();
+        sum / <Self::Float as num_traits::FromPrimitive>::from_usize(self.len()).unwrap()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use num_complex::Complex;
+    use num_traits::{Float, FromPrimitive};
 
-    fn assert_close(a: f64, b: f64) {
+    fn assert_close<F: Float + FromPrimitive + std::fmt::Display>(a: F, b: F) {
         assert!(
-            (a - b).abs() < 1e-12,
+            (a - b).abs() < F::from_f64(1e-12).unwrap(),
             "expected {b}, got {a}, diff = {}",
             (a - b).abs()
         );
@@ -304,13 +612,25 @@ mod tests {
 
     #[test]
     fn complex_output_reductions_use_modulus() {
-        let z = Complex::new(3.0_f64, 4.0);
+        let z: Complex<f64> = Complex::new(3.0_f64, 4.0);
 
-        assert_close(z.modulus(), 5.0);
-        assert_close(z.max_component(), 5.0);
-        assert_close(z.mean_component(), 5.0);
-        assert_close(z.reduce_error(ErrorNorm::Max), 5.0);
-        assert_close(z.reduce_error(ErrorNorm::Mean), 5.0);
+        assert_close(<Complex<f64> as IntegrationOutput<f64>>::modulus(&z), 5.0);
+        assert_close(
+            <Complex<f64> as IntegrationOutput<f64>>::max_component(&z),
+            5.0,
+        );
+        assert_close(
+            <Complex<f64> as IntegrationOutput<f64>>::mean_component(&z),
+            5.0,
+        );
+        assert_close(
+            <Complex<f64> as IntegrationOutput<f64>>::reduce_error(&z, ErrorNorm::Max),
+            5.0,
+        );
+        assert_close(
+            <Complex<f64> as IntegrationOutput<f64>>::reduce_error(&z, ErrorNorm::Mean),
+            5.0,
+        );
         assert!(z.is_finite());
     }
 
@@ -320,7 +640,7 @@ mod tests {
         assert!(!f64::INFINITY.is_finite());
 
         let z = Complex::new(1.0_f64, f64::NAN);
-        assert!(!IntegrationOutput::is_finite(&z));
+        assert!(!<Complex<f64> as IntegrationOutput<f64>>::is_finite(&z));
     }
 
     #[cfg(feature = "ndarray")]
@@ -329,55 +649,335 @@ mod tests {
         use ndarray::{Array1, Array2, array};
 
         #[test]
-        fn array1_real_output_reductions_work() {
+        fn array1_f64_real_output_reductions_work() {
             let x: Array1<f64> = array![-1.0, 2.0, -3.0];
 
-            // Current implementation defines array modulus as sum of component magnitudes.
-            assert_close(x.modulus(), 6.0);
-            assert_close(x.max_component(), 3.0);
-            assert_close(x.mean_component(), 2.0);
-            assert_close(x.reduce_error(ErrorNorm::Max), 3.0);
-            assert_close(x.reduce_error(ErrorNorm::Mean), 2.0);
+            assert_close(
+                <Array1<f64> as IntegrationOutput<f64>>::modulus(&x),
+                Float::sqrt(14.0),
+            );
+            assert_close(
+                <Array1<f64> as IntegrationOutput<f64>>::max_component(&x),
+                3.0,
+            );
+            assert_close(
+                <Array1<f64> as IntegrationOutput<f64>>::mean_component(&x),
+                2.0,
+            );
+            assert_close(
+                <Array1<f64> as IntegrationOutput<f64>>::reduce_error(&x, ErrorNorm::Max),
+                3.0,
+            );
+            assert_close(
+                <Array1<f64> as IntegrationOutput<f64>>::reduce_error(&x, ErrorNorm::Mean),
+                2.0,
+            );
             assert!(x.is_finite());
         }
 
         #[test]
-        fn array2_real_output_reductions_work() {
+        fn array1_f32_real_output_reductions_work() {
+            let x: Array1<f32> = array![-1.0, 2.0, -3.0];
+
+            assert_close(
+                <Array1<f32> as IntegrationOutput<f32>>::modulus(&x),
+                Float::sqrt(14.0),
+            );
+            assert_close(
+                <Array1<f32> as IntegrationOutput<f32>>::max_component(&x),
+                3.0,
+            );
+            assert_close(
+                <Array1<f32> as IntegrationOutput<f32>>::mean_component(&x),
+                2.0,
+            );
+            assert_close(
+                <Array1<f32> as IntegrationOutput<f32>>::reduce_error(&x, ErrorNorm::Max),
+                3.0,
+            );
+            assert_close(
+                <Array1<f32> as IntegrationOutput<f32>>::reduce_error(&x, ErrorNorm::Mean),
+                2.0,
+            );
+            assert!(x.is_finite());
+        }
+
+        #[test]
+        fn array2_f64_real_output_reductions_work() {
             let x: Array2<f64> = array![[1.0, -2.0], [-3.0, 4.0],];
 
-            assert_close(x.modulus(), 10.0);
-            assert_close(x.max_component(), 4.0);
-            assert_close(x.mean_component(), 2.5);
-            assert_close(x.reduce_error(ErrorNorm::Max), 4.0);
-            assert_close(x.reduce_error(ErrorNorm::Mean), 2.5);
+            assert_close(
+                <Array2<f64> as IntegrationOutput<f64>>::modulus(&x),
+                Float::sqrt(30.0),
+            );
+            assert_close(
+                <Array2<f64> as IntegrationOutput<f64>>::max_component(&x),
+                4.0,
+            );
+            assert_close(
+                <Array2<f64> as IntegrationOutput<f64>>::mean_component(&x),
+                2.5,
+            );
+            assert_close(
+                <Array2<f64> as IntegrationOutput<f64>>::reduce_error(&x, ErrorNorm::Max),
+                4.0,
+            );
+            assert_close(
+                <Array2<f64> as IntegrationOutput<f64>>::reduce_error(&x, ErrorNorm::Mean),
+                2.5,
+            );
             assert!(x.is_finite());
         }
 
         #[test]
-        fn array1_complex_output_reductions_work() {
+        fn array2_f32_real_output_reductions_work() {
+            let x: Array2<f32> = array![[1.0, -2.0], [-3.0, 4.0],];
+
+            assert_close(
+                <Array2<f32> as IntegrationOutput<f32>>::modulus(&x),
+                Float::sqrt(30.0),
+            );
+            assert_close(
+                <Array2<f32> as IntegrationOutput<f32>>::max_component(&x),
+                4.0,
+            );
+            assert_close(
+                <Array2<f32> as IntegrationOutput<f32>>::mean_component(&x),
+                2.5,
+            );
+            assert_close(
+                <Array2<f32> as IntegrationOutput<f32>>::reduce_error(&x, ErrorNorm::Max),
+                4.0,
+            );
+            assert_close(
+                <Array2<f32> as IntegrationOutput<f32>>::reduce_error(&x, ErrorNorm::Mean),
+                2.5,
+            );
+            assert!(x.is_finite());
+        }
+
+        #[test]
+        fn array1_complex_f64_output_reductions_with_real_scalar_work() {
             let x: Array1<Complex<f64>> = array![
                 Complex::new(3.0, 4.0),
                 Complex::new(5.0, 12.0),
                 Complex::new(8.0, 15.0),
             ];
 
-            assert_close(x.modulus(), 5.0 + 13.0 + 17.0);
-            assert_close(x.max_component(), 17.0);
-            assert_close(x.mean_component(), (5.0 + 13.0 + 17.0) / 3.0);
-            assert!(x.is_finite());
+            assert_close(
+                <Array1<Complex<f64>> as IntegrationOutput<f64>>::modulus(&x),
+                (x[0] * x[0].conj() + x[1] * x[1].conj() + x[2] * x[2].conj())
+                    .sqrt()
+                    .re,
+            );
+            assert_close(
+                <Array1<Complex<f64>> as IntegrationOutput<f64>>::max_component(&x),
+                17.0,
+            );
+            assert_close(
+                <Array1<Complex<f64>> as IntegrationOutput<f64>>::mean_component(&x),
+                (5.0 + 13.0 + 17.0) / 3.0,
+            );
+            assert!(<Array1<Complex<f64>> as IntegrationOutput<f64>>::is_finite(
+                &x
+            ));
         }
 
         #[test]
-        fn array2_complex_output_reductions_work() {
+        fn array1_complex_f64_output_reductions_with_complex_scalar_work() {
+            let x: Array1<Complex<f64>> = array![
+                Complex::new(3.0, 4.0),
+                Complex::new(5.0, 12.0),
+                Complex::new(8.0, 15.0),
+            ];
+
+            assert_close(
+                <Array1<Complex<f64>> as IntegrationOutput<Complex<f64>>>::modulus(&x),
+                (x[0] * x[0].conj() + x[1] * x[1].conj() + x[2] * x[2].conj())
+                    .sqrt()
+                    .re,
+            );
+            assert_close(
+                <Array1<Complex<f64>> as IntegrationOutput<Complex<f64>>>::max_component(&x),
+                17.0,
+            );
+            assert_close(
+                <Array1<Complex<f64>> as IntegrationOutput<Complex<f64>>>::mean_component(&x),
+                (5.0 + 13.0 + 17.0) / 3.0,
+            );
+            assert!(<Array1<Complex<f64>> as IntegrationOutput<Complex<f64>>>::is_finite(&x));
+        }
+
+        #[test]
+        fn array1_complex_f32_output_reductions_with_real_scalar_work() {
+            let x: Array1<Complex<f32>> = array![
+                Complex::new(3.0, 4.0),
+                Complex::new(5.0, 12.0),
+                Complex::new(8.0, 15.0),
+            ];
+
+            assert_close(
+                <Array1<Complex<f32>> as IntegrationOutput<f32>>::modulus(&x),
+                (x[0] * x[0].conj() + x[1] * x[1].conj() + x[2] * x[2].conj())
+                    .sqrt()
+                    .re,
+            );
+            assert_close(
+                <Array1<Complex<f32>> as IntegrationOutput<f32>>::max_component(&x),
+                17.0,
+            );
+            assert_close(
+                <Array1<Complex<f32>> as IntegrationOutput<f32>>::mean_component(&x),
+                (5.0 + 13.0 + 17.0) / 3.0,
+            );
+            assert!(<Array1<Complex<f32>> as IntegrationOutput<f32>>::is_finite(
+                &x
+            ));
+        }
+
+        #[test]
+        fn array1_complex_f32_output_reductions_with_complex_scalar_work() {
+            let x: Array1<Complex<f32>> = array![
+                Complex::new(3.0, 4.0),
+                Complex::new(5.0, 12.0),
+                Complex::new(8.0, 15.0),
+            ];
+
+            assert_close(
+                <Array1<Complex<f32>> as IntegrationOutput<Complex<f32>>>::modulus(&x),
+                (x[0] * x[0].conj() + x[1] * x[1].conj() + x[2] * x[2].conj())
+                    .sqrt()
+                    .re,
+            );
+            assert_close(
+                <Array1<Complex<f32>> as IntegrationOutput<Complex<f32>>>::max_component(&x),
+                17.0,
+            );
+            assert_close(
+                <Array1<Complex<f32>> as IntegrationOutput<Complex<f32>>>::mean_component(&x),
+                (5.0 + 13.0 + 17.0) / 3.0,
+            );
+            assert!(<Array1<Complex<f32>> as IntegrationOutput<Complex<f32>>>::is_finite(&x));
+        }
+
+        #[test]
+        fn array2_complex_f64_output_reductions_with_real_scalar_work() {
             let x: Array2<Complex<f64>> = array![
                 [Complex::new(3.0, 4.0), Complex::new(0.0, 2.0)],
                 [Complex::new(5.0, 12.0), Complex::new(1.0, 0.0)],
             ];
 
-            assert_close(x.modulus(), 5.0 + 2.0 + 13.0 + 1.0);
-            assert_close(x.max_component(), 13.0);
-            assert_close(x.mean_component(), (5.0 + 2.0 + 13.0 + 1.0) / 4.0);
-            assert!(x.is_finite());
+            let modulus = x
+                .iter()
+                .map(|each| each * each.conj())
+                .map(|each| each.re)
+                .sum::<f64>()
+                .sqrt();
+
+            assert_close(
+                <Array2<Complex<f64>> as IntegrationOutput<f64>>::modulus(&x),
+                modulus,
+            );
+            assert_close(
+                <Array2<Complex<f64>> as IntegrationOutput<f64>>::max_component(&x),
+                13.0,
+            );
+            assert_close(
+                <Array2<Complex<f64>> as IntegrationOutput<f64>>::mean_component(&x),
+                (5.0 + 2.0 + 13.0 + 1.0) / 4.0,
+            );
+            assert!(<Array2<Complex<f64>> as IntegrationOutput<f64>>::is_finite(
+                &x
+            ));
+        }
+
+        #[test]
+        fn array2_complex_f64_output_reductions_with_complex_scalar_work() {
+            let x: Array2<Complex<f64>> = array![
+                [Complex::new(3.0, 4.0), Complex::new(0.0, 2.0)],
+                [Complex::new(5.0, 12.0), Complex::new(1.0, 0.0)],
+            ];
+
+            let modulus = x
+                .iter()
+                .map(|each| each * each.conj())
+                .map(|each| each.re)
+                .sum::<f64>()
+                .sqrt();
+
+            assert_close(
+                <Array2<Complex<f64>> as IntegrationOutput<Complex<f64>>>::modulus(&x),
+                modulus,
+            );
+            assert_close(
+                <Array2<Complex<f64>> as IntegrationOutput<Complex<f64>>>::max_component(&x),
+                13.0,
+            );
+            assert_close(
+                <Array2<Complex<f64>> as IntegrationOutput<Complex<f64>>>::mean_component(&x),
+                (5.0 + 2.0 + 13.0 + 1.0) / 4.0,
+            );
+            assert!(<Array2<Complex<f64>> as IntegrationOutput<Complex<f64>>>::is_finite(&x));
+        }
+
+        #[test]
+        fn array2_complex_f32_output_reductions_with_real_scalar_work() {
+            let x: Array2<Complex<f32>> = array![
+                [Complex::new(3.0, 4.0), Complex::new(0.0, 2.0)],
+                [Complex::new(5.0, 12.0), Complex::new(1.0, 0.0)],
+            ];
+
+            let modulus = x
+                .iter()
+                .map(|each| each * each.conj())
+                .map(|each| each.re)
+                .sum::<f32>()
+                .sqrt();
+
+            assert_close(
+                <Array2<Complex<f32>> as IntegrationOutput<f32>>::modulus(&x),
+                modulus,
+            );
+            assert_close(
+                <Array2<Complex<f32>> as IntegrationOutput<f32>>::max_component(&x),
+                13.0,
+            );
+            assert_close(
+                <Array2<Complex<f32>> as IntegrationOutput<f32>>::mean_component(&x),
+                (5.0 + 2.0 + 13.0 + 1.0) / 4.0,
+            );
+            assert!(<Array2<Complex<f32>> as IntegrationOutput<f32>>::is_finite(
+                &x
+            ));
+        }
+
+        #[test]
+        fn array2_complex_f32_output_reductions_with_complex_scalar_work() {
+            let x: Array2<Complex<f32>> = array![
+                [Complex::new(3.0, 4.0), Complex::new(0.0, 2.0)],
+                [Complex::new(5.0, 12.0), Complex::new(1.0, 0.0)],
+            ];
+
+            let modulus = x
+                .iter()
+                .map(|each| each * each.conj())
+                .map(|each| each.re)
+                .sum::<f32>()
+                .sqrt();
+
+            assert_close(
+                <Array2<Complex<f32>> as IntegrationOutput<Complex<f32>>>::modulus(&x),
+                modulus,
+            );
+            assert_close(
+                <Array2<Complex<f32>> as IntegrationOutput<Complex<f32>>>::max_component(&x),
+                13.0,
+            );
+            assert_close(
+                <Array2<Complex<f32>> as IntegrationOutput<Complex<f32>>>::mean_component(&x),
+                (5.0 + 2.0 + 13.0 + 1.0) / 4.0,
+            );
+            assert!(<Array2<Complex<f32>> as IntegrationOutput<Complex<f32>>>::is_finite(&x));
         }
 
         #[test]
@@ -387,17 +987,24 @@ mod tests {
 
             let z: Array1<Complex<f64>> =
                 array![Complex::new(1.0, 0.0), Complex::new(f64::INFINITY, 0.0),];
-            assert!(!z.is_finite());
+            assert!(!<Array1<Complex<f64>> as IntegrationOutput<f64>>::is_finite(&z));
+            assert!(!<Array1<Complex<f64>> as IntegrationOutput<Complex<f64>>>::is_finite(&z));
         }
 
         #[test]
         fn empty_array_reductions_are_well_defined() {
             let x: Array1<f64> = Array1::from_vec(vec![]);
 
-            assert_close(x.modulus(), 0.0);
-            assert_close(x.max_component(), 0.0);
-            assert_close(x.mean_component(), 0.0);
-            assert!(x.is_finite());
+            assert_close(<Array1<f64> as IntegrationOutput<f64>>::modulus(&x), 0.0);
+            assert_close(
+                <Array1<f64> as IntegrationOutput<f64>>::max_component(&x),
+                0.0,
+            );
+            assert_close(
+                <Array1<f64> as IntegrationOutput<f64>>::mean_component(&x),
+                0.0,
+            );
+            assert!(<Array1<f64> as IntegrationOutput<f64>>::is_finite(&x));
         }
     }
 }
