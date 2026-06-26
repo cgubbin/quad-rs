@@ -1003,9 +1003,11 @@ mod integrate_piece_tests {
 
     #[test]
     fn recursive_singularity_splitting_handles_bad_midpoint() {
-        let mut gk = GaussKronrod::<f64>::default();
-        gk.singularity_handling = SingularityHandling::RecursiveSplit { max_depth: 8 };
-        gk.minimum_segment_width = 1e-14;
+        let mut gk = GaussKronrod::<f64> {
+            singularity_handling: SingularityHandling::RecursiveSplit { max_depth: 8 },
+            minimum_segment_width: 1e-14,
+            ..Default::default()
+        };
 
         let f = RealFn(|x: &f64| {
             if (*x - 0.5).abs() < 1e-15 {
@@ -1030,9 +1032,11 @@ mod integrate_piece_tests {
 
     #[test]
     fn recursive_singularity_splitting_respects_max_depth() {
-        let mut gk = GaussKronrod::<f64>::default();
-        gk.singularity_handling = SingularityHandling::RecursiveSplit { max_depth: 0 };
-        gk.minimum_segment_width = 1e-14;
+        let mut gk = GaussKronrod::<f64> {
+            singularity_handling: SingularityHandling::RecursiveSplit { max_depth: 0 },
+            minimum_segment_width: 1e-14,
+            ..Default::default()
+        };
 
         let f = RealFn(|x: &f64| {
             if (*x - 0.5).abs() < 1e-15 {
