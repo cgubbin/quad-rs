@@ -1,6 +1,6 @@
 [package]
 name = "quad-rs"
-version = "0.2.3"
+version = "0.3.0"
 edition = "2024"
 rust-version = "1.85"
 authors = ["Christopher R. Gubbin <cgubbin@gmail.com>"]
