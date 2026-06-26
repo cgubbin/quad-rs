@@ -963,8 +963,10 @@ mod integrate_piece_tests {
 
     #[test]
     fn singularity_policy_error_does_not_split() {
-        let mut gk = GaussKronrod::<f64>::default();
-        gk.singularity_handling = SingularityHandling::Error;
+        let gk = GaussKronrod::<f64> {
+            singularity_handling: SingularityHandling::Error,
+            ..Default::default()
+        };
 
         let f = RealFn(|_: &f64| f64::NAN);
         let piece: LineSegment<f64> = (0.0..1.0).into();
@@ -979,9 +981,11 @@ mod integrate_piece_tests {
 
     #[test]
     fn recursive_singularity_splitting_succeeds_for_endpoint_singularity() {
-        let mut gk = GaussKronrod::<f64>::default();
-        gk.singularity_handling = SingularityHandling::RecursiveSplit { max_depth: 8 };
-        gk.minimum_segment_width = 1e-14;
+        let gk = GaussKronrod::<f64> {
+            singularity_handling: SingularityHandling::RecursiveSplit { max_depth: 8 },
+            minimum_segment_width: 1e-14,
+            ..Default::default()
+        };
 
         // This is non-finite at x = 0, but Gauss-Kronrod does not evaluate endpoints.
         // If the singularity is detected by fallback midpoint splitting, the policy
@@ -1003,7 +1007,7 @@ mod integrate_piece_tests {
 
     #[test]
     fn recursive_singularity_splitting_handles_bad_midpoint() {
-        let mut gk = GaussKronrod::<f64> {
+        let gk = GaussKronrod::<f64> {
             singularity_handling: SingularityHandling::RecursiveSplit { max_depth: 8 },
             minimum_segment_width: 1e-14,
             ..Default::default()
@@ -1032,7 +1036,7 @@ mod integrate_piece_tests {
 
     #[test]
     fn recursive_singularity_splitting_respects_max_depth() {
-        let mut gk = GaussKronrod::<f64> {
+        let gk = GaussKronrod::<f64> {
             singularity_handling: SingularityHandling::RecursiveSplit { max_depth: 0 },
             minimum_segment_width: 1e-14,
             ..Default::default()

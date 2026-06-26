@@ -757,7 +757,7 @@ mod tests {
             let abscissae = GK::compute_gauss_kronrod_abscissae(m, &coeffs, &zeros);
             let weights = GK::compute_gauss_kronrod_weights(&abscissae, &coeffs);
 
-            assert_eq!(weights.gauss.len(), (m + 1) / 2);
+            assert_eq!(weights.gauss.len(), m.div_ceil(2));
             assert_eq!(weights.gauss_kronrod.len(), m + 1);
 
             for &w in &weights.gauss {
